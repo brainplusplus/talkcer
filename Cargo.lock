@@ -1685,6 +1685,7 @@ name = "talkcer-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64",
  "chrono",
  "serde",
  "serde_json",
@@ -1707,6 +1708,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64",
  "futures-util",
  "http-body-util",
  "serde",

@@ -89,6 +89,27 @@ POST /sessions/:id/mock
 
 Text-only. `start` stores the first question and sets `active`. `answer` stores the answer and a follow-up. `complete` stores feedback and a summary, then sets `completed`. The generated rows remain on `GET /sessions/:id/timeline`.
 
+## Learning
+```http
+POST /sessions/:id/learning
+```
+
+```json
+{ "action": "start" }
+{ "action": "discuss", "text": "When should I add an index?" }
+{ "action": "answer", "text": "When the filter is selective." }
+```
+
+Text-only. `start` introduces `context.topic` and stores a practice prompt. The session stays `active`, so a later `discuss` continues the same timeline after a restart.
+
+## Browser voice
+```http
+POST /sessions/:id/voice/audio
+POST /sessions/:id/voice/speak
+```
+
+`voice/audio` accepts `audio_source` `browser_mic` or `mock_audio`. The mock adapter uses `text` or base64 UTF-8 chunks as the transcript. The same `utterance_id` updates one row, and the first `browser_mic` value stays in metadata. `voice/speak` returns a local WAV only when `session.configuration.tts` is `"enabled"`. No remote STT or TTS provider is called.
+
 ## Audio devices
 ```http
 GET /devices/audio

@@ -38,6 +38,7 @@ fn partial(id: Option<Uuid>, text: &str, started_at_ms: i64, is_final: bool) -> 
         started_at_ms,
         ended_at_ms: None,
         is_final,
+        metadata: None,
     }
 }
 

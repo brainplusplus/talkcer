@@ -38,7 +38,9 @@ impl IntoResponse for ApiError {
             | CoreError::UnknownProvider(_)
             | CoreError::InvalidCapability(_)
             | CoreError::EmptyName
-            | CoreError::InvalidMockAction(_) => StatusCode::BAD_REQUEST,
+            | CoreError::InvalidMockAction(_)
+            | CoreError::InvalidLearningAction(_)
+            | CoreError::InvalidAudio(_) => StatusCode::BAD_REQUEST,
             CoreError::UtteranceClosed | CoreError::UtteranceSessionMismatch => StatusCode::CONFLICT,
             CoreError::NotFound | CoreError::ItemNotFound => StatusCode::NOT_FOUND,
             CoreError::Database(_) | CoreError::Migration(_) => StatusCode::INTERNAL_SERVER_ERROR,

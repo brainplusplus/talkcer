@@ -3,8 +3,9 @@
 use std::path::Path;
 
 use talkcer_core::{
-    AiConfigurationService, MockInterviewService, SessionService, SqliteAiConfigurationRepository,
-    SqliteSessionRepository, SqliteTimelineRepository, TimelineService,
+    AiConfigurationService, LearningService, MockInterviewService, SessionService,
+    SqliteAiConfigurationRepository, SqliteSessionRepository, SqliteTimelineRepository, TimelineService,
+    VoiceService,
 };
 use tokio::sync::broadcast;
 
@@ -19,6 +20,10 @@ pub struct AppState {
     pub ai: AiConfigurationService<SqliteAiConfigurationRepository>,
     /// Text mock interview controller.
     pub mock: MockInterviewService<SqliteSessionRepository, SqliteTimelineRepository>,
+    /// Text learning controller.
+    pub learning: LearningService<SqliteSessionRepository, SqliteTimelineRepository>,
+    /// Mock browser voice adapter.
+    pub voice: VoiceService<SqliteSessionRepository, SqliteTimelineRepository>,
     /// Broadcast channel for WebSocket subscribers. Payloads are JSON events.
     pub events: broadcast::Sender<String>,
 }
@@ -36,6 +41,8 @@ impl AppState {
         let timeline = TimelineService::new(SqliteTimelineRepository::new(pool.clone()));
         Ok(Self {
             mock: MockInterviewService::new(sessions.clone(), timeline.clone()),
+            learning: LearningService::new(sessions.clone(), timeline.clone()),
+            voice: VoiceService::new(sessions.clone(), timeline.clone()),
             sessions,
             timeline,
             ai: AiConfigurationService::new(SqliteAiConfigurationRepository::new(pool)),

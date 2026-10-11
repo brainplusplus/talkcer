@@ -58,3 +58,13 @@ POST /api/sessions/{id}/mock
 ```
 
 Configuration stores a credential reference, never a raw key. The mock route is text-only and does not call a model.
+
+## Learning and browser voice
+
+```http
+POST /api/sessions/{id}/learning
+POST /api/sessions/{id}/voice/audio
+POST /api/sessions/{id}/voice/speak
+```
+
+A learning session stays active and can continue after it is reopened. Tests use mock audio. Browser capture is marked `browser_mic` in metadata. Playback is a local WAV and only works when session TTS is enabled.

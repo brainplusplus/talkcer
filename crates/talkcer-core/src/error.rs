@@ -106,6 +106,14 @@ pub enum CoreError {
     #[error("invalid mock interview action: {0}")]
     InvalidMockAction(String),
 
+    /// The action is not available for this learning session.
+    #[error("invalid learning action: {0}")]
+    InvalidLearningAction(String),
+
+    /// Browser audio input cannot be transcribed.
+    #[error("invalid audio input: {0}")]
+    InvalidAudio(String),
+
     /// Persistence failed.
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),

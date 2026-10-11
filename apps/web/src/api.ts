@@ -1,3 +1,4 @@
+export type { TimelineItem } from "./timeline";
 import type { TimelineItem } from "./timeline";
 
 export type SessionMode = "live_interview" | "mock_interview" | "learning";
@@ -96,7 +97,7 @@ export function createSession(input: CreateSessionInput): Promise<Session> {
 
 export function updateSession(
   id: string,
-  input: { title?: string; status?: SessionStatus },
+  input: { title?: string; status?: SessionStatus; configuration?: Record<string, unknown> },
 ): Promise<Session> {
   return request(`/api/sessions/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
@@ -171,6 +172,40 @@ export function testProvider(id: string, capability: Capability): Promise<{ ok: 
   return request(`/api/config/ai/${id}/test`, {
     method: "POST",
     body: JSON.stringify({ capability }),
+  });
+}
+
+export function learningTurn(
+  sessionId: string,
+  action: "start" | "discuss" | "answer",
+  text?: string,
+): Promise<{ status: SessionStatus; items: TimelineItem[] }> {
+  return request(`/api/sessions/${sessionId}/learning`, {
+    method: "POST",
+    body: JSON.stringify({ action, text }),
+  });
+}
+
+export function sendVoiceAudio(
+  sessionId: string,
+  input: { utteranceId?: string; audioSource: "browser_mic" | "mock_audio"; text?: string; isFinal: boolean },
+): Promise<{ item: TimelineItem }> {
+  return request(`/api/sessions/${sessionId}/voice/audio`, {
+    method: "POST",
+    body: JSON.stringify({
+      utterance_id: input.utteranceId,
+      audio_source: input.audioSource,
+      text: input.text,
+      started_at_ms: Date.now(),
+      is_final: input.isFinal,
+    }),
+  });
+}
+
+export function speakText(sessionId: string, text: string): Promise<{ enabled: boolean; audio_base64: string | null }> {
+  return request(`/api/sessions/${sessionId}/voice/speak`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
   });
 }
 

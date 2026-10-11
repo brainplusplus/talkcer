@@ -5,6 +5,7 @@ import {
   allowedStatuses,
   deleteSession,
   getSession,
+  learningTurn,
   mockTurn,
   postAssistantAction,
   postMessage,
@@ -13,6 +14,7 @@ import {
   type SessionStatus,
 } from "../api";
 import { Timeline } from "../components/Timeline";
+import { VoiceControls } from "../components/VoiceControls";
 import { useTimeline } from "../useTimeline";
 
 const SLUG: Record<SessionMode, string> = {
@@ -64,6 +66,19 @@ export function SessionDetailPage() {
   const mock = useMutation({
     mutationFn: (input: { action: "start" | "answer" | "complete"; text?: string }) =>
       mockTurn(id, input.action, input.text),
+    onSuccess: async () => {
+      setMessage("");
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["session", id] });
+      await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (cause: Error) => setError(cause.message),
+  });
+
+  const learning = useMutation({
+    mutationFn: (input: { action: "start" | "discuss" | "answer"; text?: string }) =>
+      learningTurn(id, input.action, input.text),
     onSuccess: async () => {
       setMessage("");
       setError(null);
@@ -141,6 +156,44 @@ export function SessionDetailPage() {
             Complete interview
           </button>
         </form>
+      )}
+      {current.mode === "learning" && current.status === "ready" && (
+        <button type="button" onClick={() => learning.mutate({ action: "start" })} disabled={learning.isPending}>
+          Start learning
+        </button>
+      )}
+      {current.mode === "learning" && current.status === "active" && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            learning.mutate({ action: "discuss", text: message });
+          }}
+        >
+          <label>
+            Question
+            <input value={message} onChange={(event) => setMessage(event.target.value)} />
+          </label>
+          <button type="submit" disabled={learning.isPending || message.trim().length === 0}>
+            Ask
+          </button>
+          <button
+            type="button"
+            disabled={learning.isPending || message.trim().length === 0}
+            onClick={() => learning.mutate({ action: "answer", text: message })}
+          >
+            Answer practice
+          </button>
+        </form>
+      )}
+      {(current.mode === "mock_interview" || current.mode === "learning") && (
+        <VoiceControls
+          session={current}
+          items={timeline.items}
+          onChange={async () => {
+            await queryClient.invalidateQueries({ queryKey: ["session", id] });
+            await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+          }}
+        />
       )}
       {!timeline.isLoading && !timeline.isError && (
         <Timeline

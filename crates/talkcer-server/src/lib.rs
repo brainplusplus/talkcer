@@ -6,10 +6,12 @@
 mod ai;
 mod error;
 mod health;
+mod learning;
 mod mock;
 mod sessions;
 mod state;
 mod timeline;
+mod voice;
 mod ws;
 
 use std::net::SocketAddr;
@@ -41,6 +43,8 @@ pub fn router(state: AppState) -> Router {
         .merge(timeline::routes())
         .merge(ai::routes())
         .merge(mock::routes())
+        .merge(learning::routes())
+        .merge(voice::routes())
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

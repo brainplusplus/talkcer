@@ -20,6 +20,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+base64 = { workspace = true }
 futures-util = { workspace = true }
 http-body-util = "0.1"
 serde_json = { workspace = true }

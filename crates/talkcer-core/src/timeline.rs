@@ -290,10 +290,13 @@ pub struct UpsertTranscript {
     /// `false` for a partial, `true` for the closing update.
     #[serde(default)]
     pub is_final: bool,
+    /// Optional metadata. `None` leaves the stored object unchanged.
+    #[serde(default)]
+    pub metadata: Option<Value>,
 }
 
 /// Result of creating or updating an utterance.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TranscriptUpsert {
     /// Stored row.
     pub item: TimelineItem,
@@ -412,14 +415,17 @@ impl TimelineRepository for SqliteTimelineRepository {
             if existing.is_final {
                 return Err(CoreError::UtteranceClosed);
             }
+            let metadata = merged_metadata(existing.metadata, input.metadata.as_ref());
             sqlx::query(
                 "UPDATE timeline_items
-                 SET text = ?, is_final = ?, ended_at_ms = COALESCE(?, ended_at_ms)
+                 SET text = ?, is_final = ?, ended_at_ms = COALESCE(?, ended_at_ms),
+                     metadata = COALESCE(?, metadata)
                  WHERE id = ? AND session_id = ? AND is_final = 0",
             )
             .bind(&input.text)
             .bind(i64::from(input.is_final))
             .bind(input.ended_at_ms)
+            .bind(metadata.map(|value| value.to_string()))
             .bind(id.to_string())
             .bind(session_id.to_string())
             .execute(&mut *tx)
@@ -440,7 +446,7 @@ impl TimelineRepository for SqliteTimelineRepository {
                     input.started_at_ms,
                     input.ended_at_ms,
                     input.is_final,
-                    json!({}),
+                    object_metadata(input.metadata.as_ref()).unwrap_or_else(|| json!({})),
                     now,
                 ),
             )
@@ -840,6 +846,32 @@ fn map_item(row: sqlx::sqlite::SqliteRow) -> Result<TimelineItem, CoreError> {
             .map(|time| time.with_timezone(&Utc))
             .map_err(|error| CoreError::Database(sqlx::Error::Decode(Box::new(error))))?,
         ))
+}
+
+fn merged_metadata(existing: Value, incoming: Option<&Value>) -> Option<Value> {
+    let Some(incoming) = object_metadata(incoming) else {
+        return None;
+    };
+    let mut merged = existing.as_object().cloned().unwrap_or_default();
+    if let Some(audio_source) = incoming.get("audio_source").and_then(Value::as_str) {
+        if audio_source != "browser_mic"
+            && merged.get("audio_source").and_then(Value::as_str) == Some("browser_mic")
+        {
+            let mut kept = incoming.as_object().cloned().unwrap_or_default();
+            kept.insert("audio_source".to_owned(), json!("browser_mic"));
+            return Some(Value::Object(kept));
+        }
+    }
+    if let Some(object) = incoming.as_object() {
+        for (key, value) in object {
+            merged.insert(key.clone(), value.clone());
+        }
+    }
+    Some(Value::Object(merged))
+}
+
+fn object_metadata(value: Option<&Value>) -> Option<Value> {
+    value.and_then(|item| item.as_object().filter(|object| !object.is_empty()).map(|_| item.clone()))
 }
 
 fn parse_uuid(value: String) -> Result<Uuid, CoreError> {

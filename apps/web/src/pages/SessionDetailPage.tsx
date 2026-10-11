@@ -5,10 +5,14 @@ import {
   allowedStatuses,
   deleteSession,
   getSession,
+  postAssistantAction,
+  postMessage,
   updateSession,
   type SessionMode,
   type SessionStatus,
 } from "../api";
+import { Timeline } from "../components/Timeline";
+import { useTimeline } from "../useTimeline";
 
 const SLUG: Record<SessionMode, string> = {
   live_interview: "live",
@@ -21,7 +25,9 @@ export function SessionDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = useQuery({ queryKey: ["session", id], queryFn: () => getSession(id) });
+  const timeline = useTimeline(id);
   const [title, setTitle] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -44,6 +50,25 @@ export function SessionDetailPage() {
     onError: (cause: Error) => setError(cause.message),
   });
 
+  const send = useMutation({
+    mutationFn: () => postMessage(id, message),
+    onSuccess: async () => {
+      setMessage("");
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+    },
+    onError: (cause: Error) => setError(cause.message),
+  });
+
+  const explain = useMutation({
+    mutationFn: (utteranceId: string) => postAssistantAction(id, utteranceId),
+    onSuccess: async () => {
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+    },
+    onError: (cause: Error) => setError(cause.message),
+  });
+
   if (session.isLoading) {
     return <p className="muted">Loading session…</p>;
   }
@@ -59,6 +84,11 @@ export function SessionDetailPage() {
     save.mutate({ title: draftTitle });
   }
 
+  function onSend(event: FormEvent) {
+    event.preventDefault();
+    send.mutate();
+  }
+
   return (
     <section className="stack">
       <p>
@@ -66,8 +96,26 @@ export function SessionDetailPage() {
       </p>
       <h2>{current.title}</h2>
       <p className="meta">
-        {current.mode} · {current.status}
+        {current.mode} · {current.status} · {timeline.connection === "open" ? "Connected" : "Reconnecting…"}
       </p>
+      {timeline.isLoading && <p className="muted">Loading timeline…</p>}
+      {timeline.isError && <p className="error">Could not load timeline.</p>}
+      {!timeline.isLoading && !timeline.isError && (
+        <Timeline
+          items={timeline.items}
+          explaining={explain.isPending}
+          onExplain={(utteranceId) => explain.mutate(utteranceId)}
+        />
+      )}
+      <form onSubmit={onSend}>
+        <label>
+          Message
+          <input value={message} onChange={(event) => setMessage(event.target.value)} />
+        </label>
+        <button type="submit" disabled={send.isPending || message.trim().length === 0}>
+          {send.isPending ? "Sending…" : "Send"}
+        </button>
+      </form>
       <form onSubmit={onSave}>
         <label>
           Title

@@ -103,3 +103,9 @@
 - `assistant.delta` hanya berisi incremental text.
 - Semua event wajib memiliki `session_id`.
 - Event harus idempotent di sisi UI.
+- Transcript masuk melalui `POST /api/sessions/:id/transcripts`, lalu server menyiarkan `transcript.updated`.
+- `utterance_id` wajib pada `transcript.updated` saja.
+- `assistant.delta` dan `assistant.completed` memakai `message_id`, bukan `utterance_id`.
+- Target utterance disimpan di metadata item AI.
+- Update setelah final ditolak dengan `409` dan tidak menghasilkan event baru.
+- Task 3 mengirim satu delta stub, lalu `assistant.completed`. Provider nyata belum dipanggil.

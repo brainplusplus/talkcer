@@ -23,10 +23,18 @@ impl IntoResponse for ApiError {
             | CoreError::InvalidStatus(_)
             | CoreError::InvalidTransition { .. }
             | CoreError::EmptyTitle
-            | CoreError::GroupedFilterConflict => {
-                StatusCode::BAD_REQUEST
-            }
-            CoreError::NotFound => StatusCode::NOT_FOUND,
+            | CoreError::EmptyText
+            | CoreError::GroupedFilterConflict
+            | CoreError::InvalidSpeaker(_)
+            | CoreError::InvalidSource(_)
+            | CoreError::InvalidItemKind(_)
+            | CoreError::InvalidPurpose(_)
+            | CoreError::InvalidAction(_)
+            | CoreError::InvalidTarget
+            | CoreError::InvalidTimestamp
+            | CoreError::InvalidLimit => StatusCode::BAD_REQUEST,
+            CoreError::UtteranceClosed | CoreError::UtteranceSessionMismatch => StatusCode::CONFLICT,
+            CoreError::NotFound | CoreError::ItemNotFound => StatusCode::NOT_FOUND,
             CoreError::Database(_) | CoreError::Migration(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let body = Json(json!({

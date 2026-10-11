@@ -80,15 +80,27 @@ export function getHealth(): Promise<{ status: string; app: string; version: str
 }
 
 export function listSessions(mode: SessionMode): Promise<{ sessions: Session[] }> {
-  return request(`/api/sessions?mode=${mode}`);
+  return request(listSessionsPath(mode));
 }
 
 export function groupedSessions(): Promise<SessionsByMode> {
   return request("/api/sessions?grouped=true");
 }
 
+export function listSessionsPath(mode: SessionMode): string {
+  return `/api/sessions?mode=${mode}`;
+}
+
+export function sessionPath(id: string): string {
+  return `/api/sessions/${id}`;
+}
+
+export function timelinePath(sessionId: string): string {
+  return `/api/sessions/${sessionId}/timeline`;
+}
+
 export function getSession(id: string): Promise<Session> {
-  return request(`/api/sessions/${id}`);
+  return request(sessionPath(id));
 }
 
 export function createSession(input: CreateSessionInput): Promise<Session> {
@@ -107,7 +119,7 @@ export function deleteSession(id: string): Promise<void> {
 }
 
 export function getTimeline(sessionId: string): Promise<{ items: TimelineItem[] }> {
-  return request(`/api/sessions/${sessionId}/timeline`);
+  return request(timelinePath(sessionId));
 }
 
 export function postMessage(sessionId: string, text: string): Promise<TimelineItem> {
@@ -255,6 +267,14 @@ export type OverlayPreferences = {
   active_session_id: string | null;
 };
 
+export function overlayViewPath(): string {
+  return "/api/overlay/view";
+}
+
+export function exportSessionPath(sessionId: string, format: "json" | "markdown"): string {
+  return `/api/sessions/${sessionId}/export?format=${format}`;
+}
+
 export function getOverlay(): Promise<OverlayPreferences> {
   return request("/api/overlay");
 }
@@ -265,6 +285,10 @@ export function showOverlay(): Promise<OverlayPreferences> {
 
 export function hideOverlay(): Promise<OverlayPreferences> {
   return request("/api/overlay/hide", { method: "POST" });
+}
+
+export function toggleOverlay(): Promise<OverlayPreferences> {
+  return request("/api/overlay/toggle", { method: "POST" });
 }
 
 export function moveOverlay(x: number, y: number): Promise<OverlayPreferences> {
@@ -284,11 +308,20 @@ export function followOverlaySession(sessionId: string): Promise<OverlayPreferen
 }
 
 export function overlayView(): Promise<{ items: TimelineItem[] }> {
-  return request("/api/overlay/view");
+  return request(overlayViewPath());
+}
+
+export async function exportSessionBlobUrl(sessionId: string, format: "json" | "markdown"): Promise<string> {
+  const response = await fetch(exportSessionPath(sessionId, format));
+  if (!response.ok) {
+    throw new ApiError(await response.text(), response.status);
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }
 
 export async function exportSession(sessionId: string, format: "json" | "markdown"): Promise<string> {
-  const response = await fetch(`/api/sessions/${sessionId}/export?format=${format}`);
+  const response = await fetch(exportSessionPath(sessionId, format));
   const text = await response.text();
   if (!response.ok) {
     throw new ApiError(text, response.status);

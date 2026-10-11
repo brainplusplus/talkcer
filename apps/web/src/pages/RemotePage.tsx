@@ -35,6 +35,8 @@ export function RemotePage() {
   return (
     <section className="stack">
       <h2>Remote access</h2>
+      {status.isLoading && <p className="muted">Loading remote status…</p>}
+      {status.isError && <p className="error">Could not load remote status.</p>}
       <p className="meta">{status.data?.enabled ? "Pairing is on." : "Pairing is off. A second computer is denied."}</p>
       <div className="row">
         <button type="button" onClick={() => pair.mutate(true)}>Pair this computer</button>
@@ -48,7 +50,8 @@ export function RemotePage() {
         </label>
         <button type="submit">Load sessions as second computer</button>
       </form>
-      {sessions && (
+      {sessions && sessions.length === 0 && <p className="muted">No sessions yet.</p>}
+      {sessions && sessions.length > 0 && (
         <ul className="list">
           {sessions.map((session) => (
             <li key={session.id}>{session.title} · {session.mode}</li>

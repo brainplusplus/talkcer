@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   allowedStatuses,
   deleteSession,
+  exportSessionBlobUrl,
   getSession,
   learningTurn,
   mockTurn,
@@ -33,6 +34,21 @@ export function SessionDetailPage() {
   const [title, setTitle] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [exportName, setExportName] = useState("talkcer-session.md");
+
+  async function downloadExport(format: "json" | "markdown") {
+    try {
+      const url = await exportSessionBlobUrl(id, format);
+      if (exportUrl) {
+        URL.revokeObjectURL(exportUrl);
+      }
+      setExportUrl(url);
+      setExportName(format === "json" ? `talkcer-session-${id}.json` : `talkcer-session-${id}.md`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Export failed.");
+    }
+  }
 
   const save = useMutation({
     mutationFn: (next: { title?: string; status?: SessionStatus }) => updateSession(id, next),
@@ -220,6 +236,11 @@ export function SessionDetailPage() {
           {send.isPending ? "Sending…" : "Send"}
         </button>
       </form>
+      <div className="row">
+        <button type="button" onClick={() => void downloadExport("markdown")}>Download Markdown</button>
+        <button type="button" onClick={() => void downloadExport("json")}>Download JSON</button>
+        {exportUrl && <a href={exportUrl} download={exportName}>Save {exportName}</a>}
+      </div>
       <form onSubmit={onSave}>
         <label>
           Title

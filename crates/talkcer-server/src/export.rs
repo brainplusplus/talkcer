@@ -29,9 +29,18 @@ async fn export(
     let format = ExportFormat::parse(&query.format)?;
     let document = export_session(&state.sessions, &state.timeline, id, format).await?;
     tracing::info!(session_id = %id, format = query.format, "session exported");
+    let extension = match format {
+        ExportFormat::Json => "json",
+        ExportFormat::Markdown => "md",
+    };
+    let filename = format!("talkcer-session-{id}.{extension}");
+    let disposition = format!("attachment; filename=\"{filename}\"");
     Ok((
         StatusCode::OK,
-        [(header::CONTENT_TYPE, document.content_type)],
+        [
+            (header::CONTENT_TYPE, document.content_type),
+            (header::CONTENT_DISPOSITION, disposition.as_str()),
+        ],
         document.body,
     )
         .into_response())

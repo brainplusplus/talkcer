@@ -364,6 +364,17 @@ pub trait TimelineRepository: Send + Sync {
         session_id: Uuid,
         request: AssistantActionRequest,
     ) -> Result<AssistantResult, CoreError>;
+
+    /// Store one completed timeline row of the requested kind.
+    async fn append_item(
+        &self,
+        session_id: Uuid,
+        kind: ItemKind,
+        speaker: Speaker,
+        purpose: Purpose,
+        text: String,
+        metadata: Value,
+    ) -> Result<TimelineItem, CoreError>;
 }
 
 /// SQLite timeline store.
@@ -581,6 +592,46 @@ impl TimelineRepository for SqliteTimelineRepository {
             message,
         })
     }
+
+    async fn append_item(
+        &self,
+        session_id: Uuid,
+        kind: ItemKind,
+        speaker: Speaker,
+        purpose: Purpose,
+        text: String,
+        metadata: Value,
+    ) -> Result<TimelineItem, CoreError> {
+        let text = text.trim().to_owned();
+        if text.is_empty() {
+            return Err(CoreError::EmptyText);
+        }
+        let source = match speaker {
+            Speaker::Ai => Source::AiGenerated,
+            Speaker::System => Source::Text,
+            Speaker::LocalUser | Speaker::Remote => Source::Text,
+        };
+        let mut tx = self.pool.begin().await?;
+        ensure_session(&mut tx, session_id).await?;
+        let now = Utc::now();
+        let item = new_item(
+            Uuid::now_v7(),
+            session_id,
+            kind,
+            speaker,
+            source,
+            purpose,
+            text,
+            now.timestamp_millis(),
+            Some(now.timestamp_millis()),
+            true,
+            if metadata.is_object() { metadata } else { json!({}) },
+            now,
+        );
+        insert_item(&mut tx, &item).await?;
+        tx.commit().await?;
+        Ok(item)
+    }
 }
 
 /// Application service for timeline reads and writes.
@@ -660,6 +711,26 @@ where
         request: AssistantActionRequest,
     ) -> Result<AssistantResult, CoreError> {
         self.repository.record_assistant(session_id, request).await
+    }
+
+    /// Append one completed timeline row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::EmptyText`] when the text is blank and
+    /// [`CoreError::NotFound`] when the session does not exist.
+    pub async fn append_item(
+        &self,
+        session_id: Uuid,
+        kind: ItemKind,
+        speaker: Speaker,
+        purpose: Purpose,
+        text: String,
+        metadata: Value,
+    ) -> Result<TimelineItem, CoreError> {
+        self.repository
+            .append_item(session_id, kind, speaker, purpose, text, metadata)
+            .await
     }
 }
 

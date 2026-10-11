@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { getHealth, type SessionMode } from "./api";
+import { AiConfigPage } from "./pages/AiConfigPage";
 import { NewSessionPage } from "./pages/NewSessionPage";
 import { SessionDetailPage } from "./pages/SessionDetailPage";
 import { SessionListPage } from "./pages/SessionListPage";
@@ -24,6 +25,7 @@ export function App() {
               {item.label}
             </NavLink>
           ))}
+          <NavLink to="/settings/ai">AI</NavLink>
         </nav>
         <p className="meta">
           {health.isLoading && "Connecting…"}
@@ -34,6 +36,7 @@ export function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<Navigate to="/live" replace />} />
+          <Route path="/settings/ai" element={<AiConfigPage />} />
           {NAV.map((item) => (
             <Route key={item.to} path={item.to}>
               <Route index element={<SessionListPage mode={item.mode} label={item.label} />} />

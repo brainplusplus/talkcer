@@ -47,3 +47,14 @@ WS /ws?session_id={id}
 ```
 
 A repeated `utterance_id` updates the same row. A final row rejects later updates with `409`. `assistant.action` stores a local stub and does not call a provider.
+
+## AI configuration and mock interview
+
+```http
+GET /api/config/ai/providers
+PUT /api/config/ai
+POST /api/config/ai/{id}/test
+POST /api/sessions/{id}/mock
+```
+
+Configuration stores a credential reference, never a raw key. The mock route is text-only and does not call a model.

@@ -70,8 +70,24 @@ Supported actions:
 ```http
 GET /config/ai
 PUT /config/ai
-POST /config/ai/test
+GET /config/ai/providers
+POST /config/ai/:id/test
 ```
+
+`PUT` stores `embedded`, `self_hosted`, or `cloud` slots. Cloud requires `endpoint` and `credentials_ref`. A raw secret is rejected. `GET /config/ai/providers` exposes capability flags to the UI. The test route checks the saved configuration against the registry and does not call a remote provider.
+
+## Mock interview
+```http
+POST /sessions/:id/mock
+```
+
+```json
+{ "action": "start" }
+{ "action": "answer", "text": "I separated retries from the request path." }
+{ "action": "complete", "text": "I would keep retries bounded." }
+```
+
+Text-only. `start` stores the first question and sets `active`. `answer` stores the answer and a follow-up. `complete` stores feedback and a summary, then sets `completed`. The generated rows remain on `GET /sessions/:id/timeline`.
 
 ## Audio devices
 ```http

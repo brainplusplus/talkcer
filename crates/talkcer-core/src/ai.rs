@@ -109,6 +109,9 @@ pub struct ProviderConfig {
     /// External secret name. Cloud providers require it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials_ref: Option<String>,
+    /// The user allowed this cloud provider to receive session data.
+    #[serde(default)]
+    pub consent: bool,
 }
 
 /// Named STT, thinker, and TTS configuration.
@@ -531,6 +534,12 @@ fn validate_slot(
             capability.as_str()
         )));
     }
+    if config.kind == ProviderKind::Cloud && !config.consent {
+        return Err(CoreError::InvalidConfiguration(format!(
+            "{} cloud provider needs consent before session data leaves this computer",
+            capability.as_str()
+        )));
+    }
     if let Some(endpoint) = &config.endpoint {
         let endpoint = endpoint.trim();
         if !endpoint.is_empty()
@@ -544,6 +553,21 @@ fn validate_slot(
         }
     }
     Ok(())
+}
+
+/// Stop a provider call that runs longer than `limit`.
+///
+/// # Errors
+///
+/// Returns [`CoreError::ProviderTimeout`] when the limit is reached, or the inner error.
+pub async fn run_with_timeout<T>(
+    limit: std::time::Duration,
+    work: impl std::future::Future<Output = Result<T, CoreError>>,
+) -> Result<T, CoreError> {
+    match tokio::time::timeout(limit, work).await {
+        Ok(result) => result,
+        Err(_) => Err(CoreError::ProviderTimeout),
+    }
 }
 
 fn reject_secret(value: &str) -> Result<(), CoreError> {

@@ -2,10 +2,12 @@
 
 use std::path::Path;
 
+use std::sync::Arc;
+
 use talkcer_core::{
-    AiConfigurationService, CaptureService, LearningService, MockInterviewService, RemoteAccessService,
-    SessionService, SqliteAiConfigurationRepository, SqliteSessionRepository, SqliteTimelineRepository,
-    TimelineService, VoiceService,
+    AiConfigurationService, CaptureService, LearningService, MockInterviewService, OverlayService,
+    RateGate, RemoteAccessService, SessionService, SqliteAiConfigurationRepository,
+    SqliteSessionRepository, SqliteTimelineRepository, TimelineService, VoiceService,
 };
 use tokio::sync::broadcast;
 
@@ -28,6 +30,10 @@ pub struct AppState {
     pub capture: CaptureService<SqliteSessionRepository, SqliteTimelineRepository>,
     /// Pairing gate for a second computer.
     pub remote: RemoteAccessService,
+    /// Overlay preferences and the session it follows.
+    pub overlay: OverlayService<SqliteTimelineRepository>,
+    /// Remote request limit. Local requests do not consume it.
+    pub rate: Arc<tokio::sync::Mutex<RateGate>>,
     /// Broadcast channel for WebSocket subscribers. Payloads are JSON events.
     pub events: broadcast::Sender<String>,
 }
@@ -39,6 +45,18 @@ impl AppState {
     ///
     /// Returns the underlying core error when the file cannot be opened.
     pub async fn connect(database_path: &Path) -> Result<Self, talkcer_core::CoreError> {
+        Self::connect_with_limit(database_path, 30).await
+    }
+
+    /// Open SQLite with a custom remote request limit.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying core error when the file cannot be opened.
+    pub async fn connect_with_limit(
+        database_path: &Path,
+        remote_limit: u32,
+    ) -> Result<Self, talkcer_core::CoreError> {
         let pool = talkcer_core::connect_and_migrate(database_path).await?;
         let (events, _) = broadcast::channel(256);
         let sessions = SessionService::new(SqliteSessionRepository::new(pool.clone()));
@@ -49,6 +67,8 @@ impl AppState {
             voice: VoiceService::new(sessions.clone(), timeline.clone()),
             capture: CaptureService::new(sessions.clone(), timeline.clone(), pool.clone()),
             remote: RemoteAccessService::new(pool.clone()),
+            overlay: OverlayService::new(pool.clone(), timeline.clone()),
+            rate: Arc::new(tokio::sync::Mutex::new(RateGate::new(remote_limit))),
             sessions,
             timeline,
             ai: AiConfigurationService::new(SqliteAiConfigurationRepository::new(pool)),

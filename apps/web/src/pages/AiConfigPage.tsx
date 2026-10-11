@@ -18,6 +18,7 @@ const EMPTY: Record<Capability, ProviderConfig> = {
     endpoint: "https://llm.example",
     model: "talkcer-thinker",
     credentials_ref: "THINKER_KEY",
+    consent: false,
   },
   tts: {
     kind: "self_hosted",
@@ -123,6 +124,17 @@ export function AiConfigPage() {
                   value={slots[capability].endpoint ?? ""}
                   onChange={(event) => update(capability, { endpoint: event.target.value })}
                 />
+              </label>
+            )}
+            {slots[capability].kind === "cloud" && (
+              <label>
+                Cloud consent
+                <input
+                  type="checkbox"
+                  checked={slots[capability].consent === true}
+                  onChange={(event) => update(capability, { consent: event.target.checked })}
+                />
+                <span className="meta">Session data leaves this computer.</span>
               </label>
             )}
             {slots[capability].kind === "cloud" && (

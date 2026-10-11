@@ -68,5 +68,6 @@ pub async fn authorize(
         return Err(ApiError(CoreError::Unauthorized));
     };
     state.remote.authorize(token).await?;
+    state.rate.lock().await.allow(token)?;
     Ok(next.run(request).await)
 }

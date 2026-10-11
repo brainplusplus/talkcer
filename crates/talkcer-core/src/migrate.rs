@@ -39,6 +39,10 @@ const EMBEDDED: &[(&str, &str)] = &[
         "002_capture_remote.sql",
         include_str!("../../../migrations/002_capture_remote.sql"),
     ),
+    (
+        "003_overlay_session.sql",
+        include_str!("../../../migrations/003_overlay_session.sql"),
+    ),
 ];
 
 /// The migrations shipped with this crate.

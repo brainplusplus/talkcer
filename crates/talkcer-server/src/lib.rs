@@ -6,9 +6,11 @@
 mod ai;
 mod capture;
 mod error;
+mod export;
 mod health;
 mod learning;
 mod mock;
+mod overlay;
 mod remote;
 mod sessions;
 mod state;
@@ -50,6 +52,8 @@ pub fn router(state: AppState) -> Router {
         .merge(voice::routes())
         .merge(capture::routes())
         .merge(remote::routes())
+        .merge(overlay::routes())
+        .merge(export::routes())
         .layer(middleware::from_fn_with_state(state.clone(), remote::authorize))
         .layer(TraceLayer::new_for_http())
         .layer(

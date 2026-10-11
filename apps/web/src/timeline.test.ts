@@ -57,6 +57,10 @@ describe("timeline reducer", () => {
 
     const ignored = applyServerEvent(finalItems, updated(id, "late"));
     expect(ignored[0]?.text).toBe("How would you handle retries?");
+
+    const replayed = applyServerEvent(finalItems, updated(id, "How would you handle retries?", true));
+    expect(replayed).toHaveLength(1);
+    expect(replayed[0]?.text).toBe("How would you handle retries?");
   });
 
   it("adds the assistant response as a separate bubble", () => {

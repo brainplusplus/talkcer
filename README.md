@@ -78,3 +78,13 @@ POST /api/remote/pair
 ```
 
 Capture is Windows-only and uses audio fixtures. Local and remote transcripts stay separate. Remote access is off until pairing returns a one-time token. A second computer must send that bearer token.
+
+## Desktop overlay
+
+```http
+POST /api/overlay/show
+POST /api/overlay/hide
+GET /api/sessions/{id}/export?format=markdown
+```
+
+The overlay follows one session and stays empty while hidden. `Ctrl+Shift+Space` is the planned shortcut. This build does not open a Tauri window. A cloud provider needs consent, and a paired remote client stops after 30 requests in one process.

@@ -122,6 +122,22 @@ pub enum CoreError {
     #[error("remote access denied")]
     Unauthorized,
 
+    /// The remote client sent too many requests.
+    #[error("remote rate limit exceeded")]
+    RateLimited,
+
+    /// An overlay change is not legal in the current state.
+    #[error("invalid overlay action: {0}")]
+    InvalidOverlay(String),
+
+    /// The export format is not supported.
+    #[error("invalid export format: {0}")]
+    InvalidExport(String),
+
+    /// A provider call did not finish in time.
+    #[error("provider timed out")]
+    ProviderTimeout,
+
     /// Persistence failed.
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),

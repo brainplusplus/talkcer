@@ -118,6 +118,14 @@ pub enum CoreError {
     #[error("invalid capture action: {0}")]
     InvalidCapture(String),
 
+    /// A native audio device could not be enumerated, opened, or read.
+    #[error("audio device error: {0}")]
+    AudioDevice(String),
+
+    /// The audio pipeline could not turn a speech run into text.
+    #[error("transcription failed: {0}")]
+    Transcription(String),
+
     /// Remote access is disabled or the pairing token is wrong.
     #[error("remote access denied")]
     Unauthorized,

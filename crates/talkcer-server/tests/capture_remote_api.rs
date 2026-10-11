@@ -1,9 +1,12 @@
 //! HTTP tests for Windows capture fixtures and remote pairing.
 
+use std::sync::Arc;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
+use talkcer_core::FixtureDeviceProvider;
 use talkcer_server::{router, AppState};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -12,6 +15,14 @@ fn path(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join("talkcer-tests");
     std::fs::create_dir_all(&dir).unwrap();
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
+}
+
+async fn app_with_fixture_devices(file: &std::path::Path) -> axum::Router {
+    router(
+        AppState::connect_with_capture_provider(file, 30, Arc::new(FixtureDeviceProvider::default_pair()))
+            .await
+            .unwrap(),
+    )
 }
 
 async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>, remote_token: Option<&str>) -> (StatusCode, Value) {
@@ -33,7 +44,7 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>, 
 #[tokio::test]
 async fn capture_channels_and_remote_gate() {
     let file = path("live-remote");
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = app_with_fixture_devices(&file).await;
     let (status, denied) = call(&app, "GET", "/api/sessions", None, Some("missing")).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{denied}");
 
@@ -51,6 +62,21 @@ async fn capture_channels_and_remote_gate() {
     let (status, started) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "start" })), None).await;
     assert_eq!(status, StatusCode::OK, "{started}");
     assert_eq!(started["platform"], "windows");
+    assert_eq!(started["devices"][0]["channel"], "microphone");
+    assert_eq!(started["devices"][0]["direction"], "capture");
+    assert_eq!(started["devices"][1]["channel"], "system_audio");
+    assert_eq!(started["devices"][1]["direction"], "render_loopback");
+
+    let (status, devices) = call(&app, "GET", &format!("/api/sessions/{id}/capture/devices"), None, None).await;
+    assert_eq!(status, StatusCode::OK, "{devices}");
+    assert_eq!(devices["devices"].as_array().unwrap().len(), 2);
+    assert_eq!(devices["devices"][1]["state"], "active");
+
+    // The API spec exposes the default endpoints globally as well.
+    let (status, global) = call(&app, "GET", "/api/devices/audio", None, None).await;
+    assert_eq!(status, StatusCode::OK, "{global}");
+    assert_eq!(global["devices"].as_array().unwrap().len(), 2);
+    assert_eq!(global["devices"][0]["channel"], "microphone");
     let (status, local) = call(&app, "POST", &format!("/api/sessions/{id}/capture/fixture"), Some(json!({ "channel": "microphone", "text": "I can hear you.", "started_at_ms": 10, "is_final": true })), None).await;
     let (status_remote, remote_audio) = call(&app, "POST", &format!("/api/sessions/{id}/capture/fixture"), Some(json!({ "channel": "system_audio", "text": "Tell me about retries.", "started_at_ms": 20, "is_final": true })), None).await;
     assert_eq!(status, StatusCode::OK);

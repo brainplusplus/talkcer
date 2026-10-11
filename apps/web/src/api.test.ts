@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   allowedStatuses,
+  audioDevicesPath,
+  captureDevicesPath,
+  capturePath,
   exportSessionPath,
   isSessionMode,
   listSessionsPath,
@@ -36,6 +39,9 @@ describe("api request paths", () => {
     expect(sessionPath("abc-123")).toBe("/api/sessions/abc-123");
     expect(timelinePath("abc-123")).toBe("/api/sessions/abc-123/timeline");
     expect(overlayViewPath()).toBe("/api/overlay/view");
+    expect(capturePath("abc-123")).toBe("/api/sessions/abc-123/capture");
+    expect(captureDevicesPath("abc-123")).toBe("/api/sessions/abc-123/capture/devices");
+    expect(audioDevicesPath()).toBe("/api/devices/audio");
     expect(exportSessionPath("abc-123", "markdown")).toBe("/api/sessions/abc-123/export?format=markdown");
     expect(exportSessionPath("abc-123", "json")).toBe("/api/sessions/abc-123/export?format=json");
   });

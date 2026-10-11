@@ -1,7 +1,9 @@
 //! Talkcer core: domain types, persistence, and session services.
 
 pub mod ai;
+pub mod audio;
 pub mod capture;
+pub mod capture_device;
 pub mod domain;
 pub mod error;
 pub mod export;
@@ -21,7 +23,18 @@ pub use ai::{
     ProviderConfig, ProviderDescriptor, ProviderKind, ProviderTestResult, SaveAiConfiguration,
     SqliteAiConfigurationRepository,
 };
-pub use capture::{CaptureAction, CaptureFixture, CaptureService, CaptureState, CaptureStatus};
+pub use capture::{
+    utf8_pcm, CaptureAction, CaptureDevice, CaptureDeviceProvider, CaptureFixture, CaptureService,
+    CaptureState, CaptureStatus, CaptureStream, CaptureTick, FixtureDeviceProvider, LiveEndpoint,
+    ScriptedDeviceProvider, SilentStream, TestStream, WasapiDeviceProvider,
+};
+pub use capture_device::{probe_default_devices, start_live_capture, DeviceProbe};
+pub use audio::{
+    build_transcriber, credential_from_env, decode_text, pcm16_to_wav, rms_i16, select_stt,
+    selection_from_config, ConfiguredSttResolver, EmbeddedSttResolver, EmbeddedTranscriber,
+    FixedSttResolver, HttpSttTranscriber, Segment, Segmenter, SttResolver, SttSelection,
+    Transcriber,
+};
 pub use domain::{Session, SessionMode, SessionStatus};
 pub use remote::{PairRequest, Pairing, RemoteAccessService, RemoteStatus};
 pub use mock::{MockAction, MockInterviewService, MockTurn, MockTurnResult};

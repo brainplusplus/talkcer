@@ -29,6 +29,9 @@ use tower_http::trace::TraceLayer;
 
 pub use state::AppState;
 
+/// Background audio pipeline pump, started by [`serve`].
+pub use capture::spawn_pump;
+
 /// Application version reported by `GET /api/health`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -73,6 +76,7 @@ pub fn router(state: AppState) -> Router {
 pub async fn serve(database_path: PathBuf, bind: SocketAddr) -> anyhow::Result<()> {
     let state = AppState::connect(&database_path).await?;
     let listener = tokio::net::TcpListener::bind(bind).await?;
+    capture::spawn_pump(state.clone());
     tracing::info!(%bind, database = %database_path.display(), "talkcer server listening");
     axum::serve(listener, router(state).into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())

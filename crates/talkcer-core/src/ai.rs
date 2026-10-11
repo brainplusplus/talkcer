@@ -415,6 +415,17 @@ fn builtin_providers() -> Vec<ProviderDescriptor> {
             &["en", "id"],
         ),
         descriptor(
+            Capability::Stt,
+            "self-hosted-stt",
+            ProviderKind::SelfHosted,
+            true,
+            false,
+            false,
+            true,
+            Some(48_000),
+            &["en", "id"],
+        ),
+        descriptor(
             Capability::Thinker,
             "embedded-thinker",
             ProviderKind::Embedded,

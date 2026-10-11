@@ -215,8 +215,45 @@ export function sendVoiceAudio(
   });
 }
 
-export function captureControl(sessionId: string, action: "start" | "pause" | "resume" | "stop" | "disconnect" | "recover"): Promise<{ state: string; platform: string; error: string | null }> {
-  return request(`/api/sessions/${sessionId}/capture`, { method: "POST", body: JSON.stringify({ action }) });
+export type CaptureDevice = {
+  channel: string;
+  name: string;
+  direction: string;
+  state: string;
+  sample_rate: number;
+  channels: number;
+  frames: number;
+};
+
+export type CaptureStatus = {
+  state: string;
+  platform: string;
+  error: string | null;
+  devices?: CaptureDevice[];
+};
+
+export function captureControl(sessionId: string, action: "start" | "pause" | "resume" | "stop" | "disconnect" | "recover"): Promise<CaptureStatus> {
+  return request(capturePath(sessionId), { method: "POST", body: JSON.stringify({ action }) });
+}
+
+export function capturePath(sessionId: string): string {
+  return `/api/sessions/${sessionId}/capture`;
+}
+
+export function captureDevicesPath(sessionId: string): string {
+  return `/api/sessions/${sessionId}/capture/devices`;
+}
+
+export function audioDevicesPath(): string {
+  return "/api/devices/audio";
+}
+
+export function audioDevices(): Promise<{ devices: CaptureDevice[] }> {
+  return request(audioDevicesPath());
+}
+
+export function captureDevices(sessionId: string): Promise<{ devices: CaptureDevice[] }> {
+  return request(captureDevicesPath(sessionId));
 }
 
 export function injectCapture(sessionId: string, channel: "microphone" | "system_audio", text: string): Promise<{ item: TimelineItem }> {

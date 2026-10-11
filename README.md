@@ -74,10 +74,56 @@ A learning session stays active and can continue after it is reopened. Tests use
 ```http
 POST /api/sessions/{id}/capture
 POST /api/sessions/{id}/capture/fixture
+GET  /api/sessions/{id}/capture/devices
+GET  /api/devices/audio
 POST /api/remote/pair
 ```
 
-Capture is Windows-only and uses audio fixtures. Local and remote transcripts stay separate. Remote access is off until pairing returns a one-time token. A second computer must send that bearer token.
+Capture is Windows-only and opens the real WASAPI endpoints: the default microphone
+(`Direction::Capture`) and the default render endpoint in loopback mode
+(`Direction::Capture` on a render device), which is how Windows exposes system audio.
+`start` returns the opened endpoints under `devices`; `GET .../capture/devices` and
+`GET /api/devices/audio` re-open them without changing the lifecycle. A device
+failure is a typed `audio device error` (HTTP 503), never a panic.
+
+While capture runs, a background pump drains each reader every 500 ms, splits the
+buffer into speech runs with an energy threshold, transcribes each run, and stores
+it on the timeline: `microphone` becomes the local speaker and `system_audio` the
+remote speaker. New transcripts and a `capture.disconnected` event are published on
+the WebSocket. When a reader thread records a read error, the pump stops the readers
+and moves capture to `error` automatically; `recover` clears it.
+
+### Speech-to-text selection
+
+Each session picks its own STT provider, so the two channels can run a real model
+while another session stays offline. The choice comes from
+`session.configuration.stt`, either as a saved configuration id or an inline
+provider config. Resolution order is saved id, then inline config, then the
+embedded offline adapter.
+
+- `embedded-stt` runs in-process and decodes UTF-8-in-PCM. Deterministic, no network,
+  and the default when a session says nothing.
+- `self-hosted-stt` and `cloud-stt` post a WAV to `<endpoint>/audio/transcriptions`
+  in the OpenAI transcription shape (`file`, `model`, `language`, `response_format`)
+  and read `{"text": "..."}`. That covers a local whisper.cpp or faster-whisper
+  server and any cloud endpoint that speaks the same protocol.
+
+A remote provider is refused unless the stored config carries `consent: true`, so
+audio cannot leave the computer by accident. A cloud provider also needs a
+`credentials_ref`; the secret itself is read at call time from the environment
+(`TALKCER_SECRET_<NAME>`) and is never stored, logged, or returned to a client. Every
+stored transcript records the provider that produced it in `metadata.stt_provider`.
+
+Remote access is off until pairing returns a one-time token. A second computer must
+send that bearer token.
+
+Run the capture and STT tests on Windows:
+
+```powershell
+cargo test -p talkcer-core --test capture_device
+cargo test -p talkcer-core --test capture_pipeline
+cargo test -p talkcer-core --test stt_selection
+```
 
 ## Desktop overlay
 

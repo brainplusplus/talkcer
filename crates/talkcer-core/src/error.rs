@@ -114,6 +114,14 @@ pub enum CoreError {
     #[error("invalid audio input: {0}")]
     InvalidAudio(String),
 
+    /// A live capture action is not legal in the current state.
+    #[error("invalid capture action: {0}")]
+    InvalidCapture(String),
+
+    /// Remote access is disabled or the pairing token is wrong.
+    #[error("remote access denied")]
+    Unauthorized,
+
     /// Persistence failed.
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),

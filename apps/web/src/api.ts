@@ -202,6 +202,31 @@ export function sendVoiceAudio(
   });
 }
 
+export function captureControl(sessionId: string, action: "start" | "pause" | "resume" | "stop" | "disconnect" | "recover"): Promise<{ state: string; platform: string; error: string | null }> {
+  return request(`/api/sessions/${sessionId}/capture`, { method: "POST", body: JSON.stringify({ action }) });
+}
+
+export function injectCapture(sessionId: string, channel: "microphone" | "system_audio", text: string): Promise<{ item: TimelineItem }> {
+  return request(`/api/sessions/${sessionId}/capture/fixture`, {
+    method: "POST",
+    body: JSON.stringify({ channel, text, started_at_ms: Date.now(), is_final: true }),
+  });
+}
+
+export function remoteStatus(): Promise<{ enabled: boolean }> {
+  return request("/api/remote/status");
+}
+
+export function pairRemote(enabled: boolean): Promise<{ enabled: boolean; token?: string }> {
+  return request("/api/remote/pair", { method: "POST", body: JSON.stringify({ enabled }) });
+}
+
+export function remoteSessions(token: string): Promise<{ sessions: Session[] }> {
+  return request("/api/sessions", {
+    headers: { authorization: `Bearer ${token}`, "x-talkcer-client": "remote" },
+  });
+}
+
 export function speakText(sessionId: string, text: string): Promise<{ enabled: boolean; audio_base64: string | null }> {
   return request(`/api/sessions/${sessionId}/voice/speak`, {
     method: "POST",

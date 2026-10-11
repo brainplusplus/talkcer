@@ -30,10 +30,16 @@ impl MigrationSource {
     }
 }
 
-const EMBEDDED: &[(&str, &str)] = &[(
-    "001_init.sql",
-    include_str!("../../../migrations/001_init.sql"),
-)];
+const EMBEDDED: &[(&str, &str)] = &[
+    (
+        "001_init.sql",
+        include_str!("../../../migrations/001_init.sql"),
+    ),
+    (
+        "002_capture_remote.sql",
+        include_str!("../../../migrations/002_capture_remote.sql"),
+    ),
+];
 
 /// The migrations shipped with this crate.
 #[must_use]

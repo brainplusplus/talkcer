@@ -1,3 +1,5 @@
+import type { TimelineItem } from "./timeline";
+
 export type SessionMode = "live_interview" | "mock_interview" | "learning";
 export type SessionStatus = "ready" | "active" | "paused" | "completed" | "archived";
 
@@ -101,4 +103,28 @@ export function updateSession(
 
 export function deleteSession(id: string): Promise<void> {
   return request(`/api/sessions/${id}`, { method: "DELETE" });
+}
+
+export function getTimeline(sessionId: string): Promise<{ items: TimelineItem[] }> {
+  return request(`/api/sessions/${sessionId}/timeline`);
+}
+
+export function postMessage(sessionId: string, text: string): Promise<TimelineItem> {
+  return request(`/api/sessions/${sessionId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ kind: "user_message", text, metadata: {} }),
+  });
+}
+
+export function postAssistantAction(
+  sessionId: string,
+  utteranceId: string,
+): Promise<{ message: TimelineItem }> {
+  return request(`/api/sessions/${sessionId}/assistant-actions`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "explain",
+      target: { kind: "utterance", id: utteranceId },
+    }),
+  });
 }

@@ -100,3 +100,21 @@ button {
 
 .error { color: #9f1239; }
 .muted { color: #6d645c; }
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.bubble {
+  background: white;
+  border: 1px solid #e4ddd4;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.bubble.partial { border-style: dashed; }
+
+.bubble p { margin: 6px 0; }

@@ -35,3 +35,15 @@ Health check:
 ```powershell
 curl.exe http://127.0.0.1:8787/api/health
 ```
+
+## Timeline
+
+Partial and final transcripts:
+
+```http
+POST /api/sessions/{id}/transcripts
+GET /api/sessions/{id}/timeline
+WS /ws?session_id={id}
+```
+
+A repeated `utterance_id` updates the same row. A final row rejects later updates with `409`. `assistant.action` stores a local stub and does not call a provider.

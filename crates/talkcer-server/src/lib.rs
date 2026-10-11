@@ -7,6 +7,8 @@ mod error;
 mod health;
 mod sessions;
 mod state;
+mod timeline;
+mod ws;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -32,7 +34,9 @@ pub const DEFAULT_BIND: &str = "127.0.0.1:8787";
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health::health))
+        .route("/ws", get(ws::connect))
         .merge(sessions::routes())
+        .merge(timeline::routes())
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

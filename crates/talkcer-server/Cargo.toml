@@ -9,6 +9,7 @@ description = "Talkcer Axum HTTP API."
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
+futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 talkcer-core = { path = "../talkcer-core" }
@@ -19,8 +20,10 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+futures-util = { workspace = true }
 http-body-util = "0.1"
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tokio-tungstenite = "0.26"
 tower = { version = "0.5", features = ["util"] }
 uuid = { workspace = true }

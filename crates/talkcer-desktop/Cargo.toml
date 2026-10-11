@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "Talkcer desktop shell placeholder. Tauri overlay arrives in Task 10."
+description = "Talkcer desktop shell. Overlay window commands are headless until Tauri is installed."
+
+[dev-dependencies]
+chrono = { workspace = true }
 
 [dependencies]
+talkcer-core = { path = "../talkcer-core" }
 talkcer-server = { path = "../talkcer-server" }

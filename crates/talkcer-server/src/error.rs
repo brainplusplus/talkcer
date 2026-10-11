@@ -41,8 +41,12 @@ impl IntoResponse for ApiError {
             | CoreError::InvalidMockAction(_)
             | CoreError::InvalidLearningAction(_)
             | CoreError::InvalidAudio(_)
-            | CoreError::InvalidCapture(_) => StatusCode::BAD_REQUEST,
+            | CoreError::InvalidCapture(_)
+            | CoreError::InvalidOverlay(_)
+            | CoreError::InvalidExport(_) => StatusCode::BAD_REQUEST,
             CoreError::Unauthorized => StatusCode::UNAUTHORIZED,
+            CoreError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+            CoreError::ProviderTimeout => StatusCode::GATEWAY_TIMEOUT,
             CoreError::UtteranceClosed | CoreError::UtteranceSessionMismatch => StatusCode::CONFLICT,
             CoreError::NotFound | CoreError::ItemNotFound => StatusCode::NOT_FOUND,
             CoreError::Database(_) | CoreError::Migration(_) => StatusCode::INTERNAL_SERVER_ERROR,

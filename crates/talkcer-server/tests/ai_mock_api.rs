@@ -46,7 +46,8 @@ fn configuration() -> Value {
             "provider": "cloud-thinker",
             "endpoint": "https://llm.example",
             "model": "talkcer-thinker",
-            "credentials_ref": "THINKER_KEY"
+            "credentials_ref": "THINKER_KEY",
+            "consent": true
         },
         "tts": {
             "kind": "self_hosted",

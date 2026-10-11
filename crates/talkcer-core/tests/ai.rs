@@ -18,6 +18,7 @@ fn slot(kind: ProviderKind, provider: &str, endpoint: Option<&str>, model: &str,
         endpoint: endpoint.map(str::to_owned),
         model: model.to_owned(),
         credentials_ref: secret.map(str::to_owned),
+        consent: kind == ProviderKind::Cloud,
     }
 }
 

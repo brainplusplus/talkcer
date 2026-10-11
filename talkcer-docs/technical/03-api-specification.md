@@ -132,16 +132,24 @@ GET /remote/status
 POST /remote/pair
 ```
 
-Pairing is off by default. Enabling it returns a token once; only its SHA-256 hash is stored. A second computer sends `x-talkcer-client: remote` and `Authorization: Bearer <token>`. A non-loopback connection must present that token too. Disabling pairing rejects the old token. The server still binds to `127.0.0.1` by default.
+Pairing is off by default. Enabling it returns a token once; only its SHA-256 hash is stored. A second computer sends `x-talkcer-client: remote` and `Authorization: Bearer <token>`. A non-loopback connection must present that token too. Disabling pairing rejects the old token. The server still binds to `127.0.0.1` by default. A paired client can make 30 remote requests per process. The next request returns `429`.
 
 ## Overlay
 ```http
-GET /settings/overlay
-PUT /settings/overlay
+GET /overlay
+PUT /overlay
 POST /overlay/show
 POST /overlay/hide
 POST /overlay/toggle
+POST /overlay/move
+POST /overlay/opacity
+POST /overlay/click-through
+GET /overlay/view
+GET /sessions/:id/export?format=json
+GET /sessions/:id/export?format=markdown
 ```
+
+The overlay starts hidden. Show keeps it above other windows. Hide removes it. Move, opacity, and click-through work only while it is visible. Opacity must be from 0.2 through 1. The view contains one session, and switching sessions removes the previous session. Preferences persist in SQLite. Export returns readable JSON or Markdown. A cloud provider also requires `consent: true` before it can be saved.
 
 ## Transcripts
 Approved for Task 3. A transcript is not a chat message.

@@ -126,6 +126,7 @@ export type ProviderConfig = {
   endpoint?: string;
   model: string;
   credentials_ref?: string;
+  consent?: boolean;
 };
 
 export type AiConfiguration = {
@@ -243,6 +244,56 @@ export function mockTurn(
     method: "POST",
     body: JSON.stringify({ action, text }),
   });
+}
+
+export type OverlayPreferences = {
+  state: "hidden" | "visible" | "click_through";
+  always_on_top: boolean;
+  opacity: number;
+  position_x: number;
+  position_y: number;
+  active_session_id: string | null;
+};
+
+export function getOverlay(): Promise<OverlayPreferences> {
+  return request("/api/overlay");
+}
+
+export function showOverlay(): Promise<OverlayPreferences> {
+  return request("/api/overlay/show", { method: "POST" });
+}
+
+export function hideOverlay(): Promise<OverlayPreferences> {
+  return request("/api/overlay/hide", { method: "POST" });
+}
+
+export function moveOverlay(x: number, y: number): Promise<OverlayPreferences> {
+  return request("/api/overlay/move", { method: "POST", body: JSON.stringify({ x, y }) });
+}
+
+export function setOverlayOpacity(opacity: number): Promise<OverlayPreferences> {
+  return request("/api/overlay/opacity", { method: "POST", body: JSON.stringify({ opacity }) });
+}
+
+export function setOverlayClickThrough(enabled: boolean): Promise<OverlayPreferences> {
+  return request("/api/overlay/click-through", { method: "POST", body: JSON.stringify({ enabled }) });
+}
+
+export function followOverlaySession(sessionId: string): Promise<OverlayPreferences> {
+  return request("/api/overlay", { method: "PUT", body: JSON.stringify({ session_id: sessionId }) });
+}
+
+export function overlayView(): Promise<{ items: TimelineItem[] }> {
+  return request("/api/overlay/view");
+}
+
+export async function exportSession(sessionId: string, format: "json" | "markdown"): Promise<string> {
+  const response = await fetch(`/api/sessions/${sessionId}/export?format=${format}`);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new ApiError(text, response.status);
+  }
+  return text;
 }
 
 export function postAssistantAction(

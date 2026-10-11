@@ -1701,6 +1701,8 @@ dependencies = [
 name = "talkcer-desktop"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "talkcer-core",
  "talkcer-server",
 ]
 

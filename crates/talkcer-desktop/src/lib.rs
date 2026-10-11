@@ -1,7 +1,9 @@
 //! Desktop shell boundary.
 //!
-//! Task 1 only reserves this crate in the workspace. The Tauri window, tray,
-//! shortcut, and overlay are Task 10 and must not be implemented here.
+//! Overlay visibility, position, and click-through are planned here. Opening the
+//! Tauri window requires the Tauri CLI, which is not part of the default build.
+
+pub mod overlay;
 
 /// Crate version, matching the workspace package version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

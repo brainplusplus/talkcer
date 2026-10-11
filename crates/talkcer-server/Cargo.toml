@@ -1,0 +1,26 @@
+[package]
+name = "talkcer-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Talkcer Axum HTTP API."
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+talkcer-core = { path = "../talkcer-core" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+http-body-util = "0.1"
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower = { version = "0.5", features = ["util"] }
+uuid = { workspace = true }

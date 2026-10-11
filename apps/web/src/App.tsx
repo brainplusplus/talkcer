@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { getHealth, type SessionMode } from "./api";
 import { AiConfigPage } from "./pages/AiConfigPage";
 import { NewSessionPage } from "./pages/NewSessionPage";
+import { RemotePage } from "./pages/RemotePage";
 import { SessionDetailPage } from "./pages/SessionDetailPage";
 import { SessionListPage } from "./pages/SessionListPage";
 
@@ -26,6 +27,7 @@ export function App() {
             </NavLink>
           ))}
           <NavLink to="/settings/ai">AI</NavLink>
+          <NavLink to="/remote">Remote</NavLink>
         </nav>
         <p className="meta">
           {health.isLoading && "Connecting…"}
@@ -37,6 +39,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/live" replace />} />
           <Route path="/settings/ai" element={<AiConfigPage />} />
+          <Route path="/remote" element={<RemotePage />} />
           {NAV.map((item) => (
             <Route key={item.to} path={item.to}>
               <Route index element={<SessionListPage mode={item.mode} label={item.label} />} />

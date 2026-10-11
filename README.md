@@ -68,3 +68,13 @@ POST /api/sessions/{id}/voice/speak
 ```
 
 A learning session stays active and can continue after it is reopened. Tests use mock audio. Browser capture is marked `browser_mic` in metadata. Playback is a local WAV and only works when session TTS is enabled.
+
+## Windows capture and remote pairing
+
+```http
+POST /api/sessions/{id}/capture
+POST /api/sessions/{id}/capture/fixture
+POST /api/remote/pair
+```
+
+Capture is Windows-only and uses audio fixtures. Local and remote transcripts stay separate. Remote access is off until pairing returns a one-time token. A second computer must send that bearer token.

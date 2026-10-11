@@ -4,10 +4,12 @@
 //! Routes bind to `127.0.0.1:8787` by default and do not call AI providers.
 
 mod ai;
+mod capture;
 mod error;
 mod health;
 mod learning;
 mod mock;
+mod remote;
 mod sessions;
 mod state;
 mod timeline;
@@ -17,6 +19,7 @@ mod ws;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use axum::middleware;
 use axum::routing::get;
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
@@ -45,6 +48,9 @@ pub fn router(state: AppState) -> Router {
         .merge(mock::routes())
         .merge(learning::routes())
         .merge(voice::routes())
+        .merge(capture::routes())
+        .merge(remote::routes())
+        .layer(middleware::from_fn_with_state(state.clone(), remote::authorize))
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()
@@ -64,6 +70,6 @@ pub async fn serve(database_path: PathBuf, bind: SocketAddr) -> anyhow::Result<(
     let state = AppState::connect(&database_path).await?;
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, database = %database_path.display(), "talkcer server listening");
-    axum::serve(listener, router(state)).await?;
+    axum::serve(listener, router(state).into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }

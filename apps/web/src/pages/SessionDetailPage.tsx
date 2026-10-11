@@ -13,6 +13,7 @@ import {
   type SessionMode,
   type SessionStatus,
 } from "../api";
+import { CaptureControls } from "../components/CaptureControls";
 import { Timeline } from "../components/Timeline";
 import { VoiceControls } from "../components/VoiceControls";
 import { useTimeline } from "../useTimeline";
@@ -191,6 +192,14 @@ export function SessionDetailPage() {
           items={timeline.items}
           onChange={async () => {
             await queryClient.invalidateQueries({ queryKey: ["session", id] });
+            await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+          }}
+        />
+      )}
+      {current.mode === "live_interview" && (
+        <CaptureControls
+          sessionId={current.id}
+          onChange={async () => {
             await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
           }}
         />

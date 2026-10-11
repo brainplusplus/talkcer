@@ -16,6 +16,8 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 base64 = "0.22"
+getrandom = "0.2"
+sha2 = "0.10"
 async-trait = "0.1"
 axum = { version = "0.8", features = ["json", "ws"] }
 futures-util = "0.3"

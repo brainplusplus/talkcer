@@ -40,7 +40,9 @@ impl IntoResponse for ApiError {
             | CoreError::EmptyName
             | CoreError::InvalidMockAction(_)
             | CoreError::InvalidLearningAction(_)
-            | CoreError::InvalidAudio(_) => StatusCode::BAD_REQUEST,
+            | CoreError::InvalidAudio(_)
+            | CoreError::InvalidCapture(_) => StatusCode::BAD_REQUEST,
+            CoreError::Unauthorized => StatusCode::UNAUTHORIZED,
             CoreError::UtteranceClosed | CoreError::UtteranceSessionMismatch => StatusCode::CONFLICT,
             CoreError::NotFound | CoreError::ItemNotFound => StatusCode::NOT_FOUND,
             CoreError::Database(_) | CoreError::Migration(_) => StatusCode::INTERNAL_SERVER_ERROR,

@@ -116,12 +116,23 @@ GET /devices/audio
 ```
 
 ## Live capture
+Windows only. Tests inject fixtures instead of opening WASAPI.
+
 ```http
-POST /sessions/:id/capture/start
-POST /sessions/:id/capture/stop
-POST /sessions/:id/capture/pause
-POST /sessions/:id/capture/resume
+GET /sessions/:id/capture
+POST /sessions/:id/capture
+POST /sessions/:id/capture/fixture
 ```
+
+`POST /capture` accepts `start`, `pause`, `resume`, `stop`, `disconnect`, and `recover`. Fixtures are accepted only while capturing. `microphone` stays the local speaker and `system_audio` stays the remote speaker.
+
+## Remote access
+```http
+GET /remote/status
+POST /remote/pair
+```
+
+Pairing is off by default. Enabling it returns a token once; only its SHA-256 hash is stored. A second computer sends `x-talkcer-client: remote` and `Authorization: Bearer <token>`. A non-loopback connection must present that token too. Disabling pairing rejects the old token. The server still binds to `127.0.0.1` by default.
 
 ## Overlay
 ```http

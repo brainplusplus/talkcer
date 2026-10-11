@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::domain::{SessionMode, SessionStatus};
 use crate::error::CoreError;
 use crate::session::{SessionRepository, SessionService, UpdateSession};
+use crate::thinker::ThinkerTask;
 use crate::timeline::{
     ItemKind, Purpose, Speaker, TimelineItem, TimelineRepository, TimelineService,
 };
@@ -72,6 +73,10 @@ pub struct MockTurnResult {
 }
 
 /// Coordinates session status and timeline writes for mock interviews.
+///
+/// AI text comes from the session's configured thinker through the attached
+/// [`crate::timeline::TimelineService`]; the embedded offline templates are used
+/// when a session selects nothing.
 #[derive(Clone)]
 pub struct MockInterviewService<S, T> {
     sessions: SessionService<S>,
@@ -107,33 +112,37 @@ where
             .context
             .get("role")
             .and_then(Value::as_str)
-            .unwrap_or("software engineer");
+            .unwrap_or("software engineer")
+            .to_owned();
         match input.action {
-            MockAction::Start => self.start(session_id, session.status, role).await,
+            MockAction::Start => self.start(&session, role).await,
             MockAction::Answer => {
                 let answer = required_text(input.text)?;
-                self.answer(session_id, session.status, role, &answer).await
+                self.answer(&session, role, &answer).await
             }
             MockAction::Complete => {
                 let answer = required_text(input.text)?;
-                self.complete(session_id, session.status, &answer).await
+                self.complete(&session, &answer).await
             }
         }
     }
 
     async fn start(
         &self,
-        session_id: Uuid,
-        status: SessionStatus,
-        role: &str,
+        session: &crate::domain::Session,
+        role: String,
     ) -> Result<MockTurnResult, CoreError> {
-        if status != SessionStatus::Ready {
+        if session.status != SessionStatus::Ready {
             return Err(CoreError::InvalidMockAction(format!(
                 "start requires ready, found {}",
-                status.as_str()
+                session.status.as_str()
             )));
         }
+        let session_id = session.id;
         self.set_status(session_id, SessionStatus::Active).await?;
+        let question_text = self
+            .think(session, ThinkerTask::MockQuestion { role })
+            .await?;
         let question = self
             .append(
                 session_id,
@@ -141,7 +150,7 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "question",
-                &format!("Tell me about your experience as a {role}."),
+                &question_text,
             )
             .await?;
         Ok(MockTurnResult {
@@ -152,17 +161,17 @@ where
 
     async fn answer(
         &self,
-        session_id: Uuid,
-        status: SessionStatus,
-        role: &str,
+        session: &crate::domain::Session,
+        role: String,
         answer: &str,
     ) -> Result<MockTurnResult, CoreError> {
-        if status != SessionStatus::Active {
+        if session.status != SessionStatus::Active {
             return Err(CoreError::InvalidMockAction(format!(
                 "answer requires active, found {}",
-                status.as_str()
+                session.status.as_str()
             )));
         }
+        let session_id = session.id;
         let answer_item = self
             .append(
                 session_id,
@@ -173,6 +182,9 @@ where
                 answer,
             )
             .await?;
+        let follow_up_text = self
+            .think(session, ThinkerTask::MockFollowUp { role })
+            .await?;
         let follow_up = self
             .append(
                 session_id,
@@ -180,7 +192,7 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "follow_up",
-                &format!("What tradeoff would you make in that {role} example?"),
+                &follow_up_text,
             )
             .await?;
         Ok(MockTurnResult {
@@ -191,16 +203,16 @@ where
 
     async fn complete(
         &self,
-        session_id: Uuid,
-        status: SessionStatus,
+        session: &crate::domain::Session,
         answer: &str,
     ) -> Result<MockTurnResult, CoreError> {
-        if status != SessionStatus::Active {
+        if session.status != SessionStatus::Active {
             return Err(CoreError::InvalidMockAction(format!(
                 "complete requires active, found {}",
-                status.as_str()
+                session.status.as_str()
             )));
         }
+        let session_id = session.id;
         let answer_item = self
             .append(
                 session_id,
@@ -211,6 +223,7 @@ where
                 answer,
             )
             .await?;
+        let feedback_text = self.think(session, ThinkerTask::MockFeedback).await?;
         let feedback = self
             .append(
                 session_id,
@@ -218,9 +231,10 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "feedback",
-                "Your answers stay on the requested topic and include a concrete example.",
+                &feedback_text,
             )
             .await?;
+        let summary_text = self.think(session, ThinkerTask::MockSummary).await?;
         let summary = self
             .append(
                 session_id,
@@ -228,7 +242,7 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "summary",
-                "Summary: the interview covered experience and one tradeoff.",
+                &summary_text,
             )
             .await?;
         self.set_status(session_id, SessionStatus::Completed).await?;
@@ -236,6 +250,16 @@ where
             status: SessionStatus::Completed,
             items: vec![answer_item, feedback, summary],
         })
+    }
+
+    /// Ask the session's configured thinker for one text reply.
+    async fn think(
+        &self,
+        session: &crate::domain::Session,
+        task: ThinkerTask,
+    ) -> Result<String, CoreError> {
+        let reply = self.timeline.think(session, &task).await?;
+        Ok(reply.text)
     }
 
     async fn set_status(&self, session_id: Uuid, status: SessionStatus) -> Result<(), CoreError> {

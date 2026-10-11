@@ -57,7 +57,9 @@ POST /api/config/ai/{id}/test
 POST /api/sessions/{id}/mock
 ```
 
-Configuration stores a credential reference, never a raw key. The mock route is text-only and does not call a model.
+Configuration stores a credential reference, never a raw key. The mock route runs on
+the session's configured thinker; with no configuration it uses the embedded offline
+templates, so it stays usable without a model.
 
 ## Learning and browser voice
 
@@ -67,7 +69,53 @@ POST /api/sessions/{id}/voice/audio
 POST /api/sessions/{id}/voice/speak
 ```
 
-A learning session stays active and can continue after it is reopened. Tests use mock audio. Browser capture is marked `browser_mic` in metadata. Playback is a local WAV and only works when session TTS is enabled.
+A learning session stays active and can continue after it is reopened. Tests use mock audio. Browser capture is marked `browser_mic` in metadata. Playback only works when session TTS is enabled, and the voice comes from the session's configured TTS provider, falling back to the embedded tone generator.
+
+## AI providers (thinker and speech)
+
+Every AI capability follows the same seam as speech-to-text: a session points at a
+provider, resolution order is saved configuration id, then inline config, then the
+embedded offline adapter, and a remote provider is refused unless it carries
+`consent: true`.
+
+### Thinker (language model)
+
+Text for assistant actions, mock interviews, and learning turns comes from the
+session's thinker (`session.configuration.thinker`).
+
+- `embedded-thinker` reproduces the original deterministic local templates. No
+  network, and the default when a session says nothing.
+- `self-hosted-thinker` and `cloud-thinker` post an OpenAI-compatible
+  `/chat/completions` request (`model`, `messages`) and read
+  `choices[0].message.content`. That covers a local Ollama or vLLM server and any
+  cloud endpoint that speaks the same protocol.
+
+Every stored AI row records `metadata.provider` and `metadata.task`, and sets
+`metadata.stub` when the embedded adapter answered.
+
+### Text-to-speech
+
+TTS stays gated by `session.configuration.tts == "enabled"`. The provider is chosen
+separately from `session.configuration.tts_provider`, so turning speech on and
+picking where it runs stay independent.
+
+- `embedded-tts` (and `disabled-tts`) return a local tone WAV. Deterministic and
+  network-free.
+- `self-hosted-tts` and `cloud-tts` post to `<endpoint>/audio/speech`
+  (`model`, `input`, `voice`, `response_format`) and return audio bytes.
+
+Both remote thinker and remote TTS need `consent: true`, and a cloud provider also
+needs a `credentials_ref`. The secret is read at call time from the environment
+(`TALKCER_SECRET_<NAME>`) and is never stored, logged, or returned.
+
+Run the AI provider tests:
+
+```powershell
+cargo test -p talkcer-core --test thinker_selection
+cargo test -p talkcer-core --test thinker_pipeline
+cargo test -p talkcer-core --test tts_selection
+cargo test -p talkcer-server --test ai_pipeline_api
+```
 
 ## Windows capture and remote pairing
 

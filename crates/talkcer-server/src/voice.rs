@@ -1,7 +1,8 @@
 //! Browser voice HTTP routes.
 //!
-//! Audio is transcribed by the mock adapter. TTS returns a local WAV only when
-//! the session configuration enables it.
+//! Audio is transcribed by the mock adapter. TTS runs only when the session
+//! configuration enables it, and the provider comes from the session's saved
+//! configuration, falling back to the embedded offline tone generator.
 
 use axum::extract::{Path, State};
 use axum::{Json, Router};

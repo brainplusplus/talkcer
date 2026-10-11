@@ -126,6 +126,10 @@ pub enum CoreError {
     #[error("transcription failed: {0}")]
     Transcription(String),
 
+    /// A thinker, speech, or other provider call failed.
+    #[error("provider unavailable: {0}")]
+    ProviderUnavailable(String),
+
     /// Remote access is disabled or the pairing token is wrong.
     #[error("remote access denied")]
     Unauthorized,

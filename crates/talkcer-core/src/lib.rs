@@ -15,6 +15,8 @@ pub mod overlay;
 pub mod voice;
 pub mod remote;
 pub mod session;
+pub mod speech;
+pub mod thinker;
 pub mod timeline;
 
 pub use ai::{
@@ -35,6 +37,15 @@ pub use audio::{
     FixedSttResolver, HttpSttTranscriber, Segment, Segmenter, SttResolver, SttSelection,
     Transcriber,
 };
+pub use thinker::{
+    build_thinker, select_thinker, thinker_from_config, ConfiguredThinkerResolver,
+    EmbeddedThinker, EmbeddedThinkerResolver, FixedThinkerResolver, HttpThinker, Thinker,
+    ThinkerReply, ThinkerResolver, ThinkerSelection, ThinkerTask,
+};
+pub use speech::{
+    build_tts, select_tts, tone_wav, tts_from_config, ConfiguredTtsResolver, EmbeddedTts,
+    EmbeddedTtsResolver, FixedTtsResolver, HttpTts, SpeechOutput, Tts, TtsResolver, TtsSelection,
+};
 pub use domain::{Session, SessionMode, SessionStatus};
 pub use remote::{PairRequest, Pairing, RemoteAccessService, RemoteStatus};
 pub use mock::{MockAction, MockInterviewService, MockTurn, MockTurnResult};
@@ -52,7 +63,8 @@ pub use session::{
     SqliteSessionRepository, UpdateSession,
 };
 pub use timeline::{
-    stub_assistant_text, AssistantAction, AssistantActionRequest, AssistantResult, ItemKind,
-    Purpose, Source, Speaker, SqliteTimelineRepository, TimelineItem, TimelinePage, TimelineQuery,
-    TimelineRepository, TimelineService, TranscriptUpsert, UpsertTranscript,
+    stub_assistant_text, AssistantAction, AssistantActionRequest, AssistantReply, AssistantResult,
+    ItemKind, Purpose, SessionLookup, Source, Speaker, SqliteTimelineRepository, TimelineItem,
+    TimelinePage, TimelineQuery, TimelineRepository, TimelineService, TranscriptUpsert,
+    UpsertTranscript,
 };

@@ -5,10 +5,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use talkcer_core::{
-    AiConfigurationService, CaptureDeviceProvider, CaptureService,
-    ConfiguredSttResolver, LearningService, MockInterviewService, OverlayService, RateGate,
-    RemoteAccessService, SessionService, SqliteAiConfigurationRepository, SqliteSessionRepository,
-    SqliteTimelineRepository, TimelineService, VoiceService, WasapiDeviceProvider,
+    AiConfigurationService, CaptureDeviceProvider, CaptureService, ConfiguredSttResolver,
+    ConfiguredThinkerResolver, ConfiguredTtsResolver, LearningService, MockInterviewService,
+    OverlayService, RateGate, RemoteAccessService, SessionService, SqliteAiConfigurationRepository,
+    SqliteSessionRepository, SqliteTimelineRepository, TimelineService, VoiceService,
+    WasapiDeviceProvider,
 };
 use tokio::sync::broadcast;
 
@@ -79,16 +80,32 @@ impl AppState {
         let pool = talkcer_core::connect_and_migrate(database_path).await?;
         let (events, _) = broadcast::channel(256);
         let sessions = SessionService::new(SqliteSessionRepository::new(pool.clone()));
-        let timeline = TimelineService::new(SqliteTimelineRepository::new(pool.clone()));
+        // The timeline resolves each session's thinker from the saved AI
+        // configurations, falling back to the embedded offline adapter. Mock
+        // and learning reuse the same timeline, so they inherit the choice.
+        let thinker: Arc<dyn talkcer_core::ThinkerResolver> = Arc::new(
+            ConfiguredThinkerResolver::new(Arc::new(SqliteAiConfigurationRepository::new(
+                pool.clone(),
+            ))),
+        );
+        let timeline = TimelineService::with_thinker(
+            SqliteTimelineRepository::new(pool.clone()),
+            thinker,
+        )
+        .with_sessions(sessions.clone());
         // Capture resolves each session's STT provider from the saved AI
         // configurations, falling back to the embedded offline adapter.
         let resolver: Arc<dyn talkcer_core::SttResolver> = Arc::new(ConfiguredSttResolver::new(
             Arc::new(SqliteAiConfigurationRepository::new(pool.clone())),
         ));
+        // Voice resolves each session's TTS provider the same way.
+        let tts: Arc<dyn talkcer_core::TtsResolver> = Arc::new(ConfiguredTtsResolver::new(
+            Arc::new(SqliteAiConfigurationRepository::new(pool.clone())),
+        ));
         Ok(Self {
             mock: MockInterviewService::new(sessions.clone(), timeline.clone()),
             learning: LearningService::new(sessions.clone(), timeline.clone()),
-            voice: VoiceService::new(sessions.clone(), timeline.clone()),
+            voice: VoiceService::with_tts(sessions.clone(), timeline.clone(), tts),
             capture: CaptureService::with_resolver(
                 sessions.clone(),
                 timeline.clone(),

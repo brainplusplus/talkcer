@@ -116,6 +116,75 @@ export function postMessage(sessionId: string, text: string): Promise<TimelineIt
   });
 }
 
+export type ProviderKind = "embedded" | "self_hosted" | "cloud";
+export type Capability = "stt" | "thinker" | "tts";
+
+export type ProviderConfig = {
+  kind: ProviderKind;
+  provider: string;
+  endpoint?: string;
+  model: string;
+  credentials_ref?: string;
+};
+
+export type AiConfiguration = {
+  id: string;
+  name: string;
+  stt: ProviderConfig;
+  thinker: ProviderConfig;
+  tts: ProviderConfig;
+};
+
+export type ProviderDescriptor = {
+  capability: Capability;
+  provider: string;
+  kind: ProviderKind;
+  capabilities: {
+    supports_streaming: boolean;
+    supports_partial_transcript: boolean;
+    supports_word_timestamps: boolean;
+    supports_cancellation: boolean;
+    max_sample_rate: number | null;
+    supported_languages: string[];
+  };
+};
+
+export function getAiConfigurations(): Promise<AiConfiguration[]> {
+  return request("/api/config/ai");
+}
+
+export function getProviders(): Promise<ProviderDescriptor[]> {
+  return request("/api/config/ai/providers");
+}
+
+export function saveAiConfiguration(input: {
+  id?: string;
+  name: string;
+  stt: ProviderConfig;
+  thinker: ProviderConfig;
+  tts: ProviderConfig;
+}): Promise<AiConfiguration> {
+  return request("/api/config/ai", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export function testProvider(id: string, capability: Capability): Promise<{ ok: boolean; message: string }> {
+  return request(`/api/config/ai/${id}/test`, {
+    method: "POST",
+    body: JSON.stringify({ capability }),
+  });
+}
+
+export function mockTurn(
+  sessionId: string,
+  action: "start" | "answer" | "complete",
+  text?: string,
+): Promise<{ status: SessionStatus; items: TimelineItem[] }> {
+  return request(`/api/sessions/${sessionId}/mock`, {
+    method: "POST",
+    body: JSON.stringify({ action, text }),
+  });
+}
+
 export function postAssistantAction(
   sessionId: string,
   utteranceId: string,

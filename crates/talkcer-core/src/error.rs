@@ -82,6 +82,30 @@ pub enum CoreError {
     #[error("utterance belongs to another session")]
     UtteranceSessionMismatch,
 
+    /// A provider kind is outside `embedded`, `self_hosted`, and `cloud`.
+    #[error("invalid provider kind: {0}")]
+    InvalidProviderKind(String),
+
+    /// A provider configuration is missing a required field or contains a secret.
+    #[error("invalid provider configuration: {0}")]
+    InvalidConfiguration(String),
+
+    /// A provider name is not registered for that capability.
+    #[error("unknown provider: {0}")]
+    UnknownProvider(String),
+
+    /// A capability name is outside `stt`, `thinker`, and `tts`.
+    #[error("invalid capability: {0}")]
+    InvalidCapability(String),
+
+    /// A configuration name is empty after trimming.
+    #[error("configuration name must not be empty")]
+    EmptyName,
+
+    /// The action is not available for this session mode or status.
+    #[error("invalid mock interview action: {0}")]
+    InvalidMockAction(String),
+
     /// Persistence failed.
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),

@@ -3,8 +3,10 @@
 //! Task 1 exposes health. Task 2 exposes session CRUD.
 //! Routes bind to `127.0.0.1:8787` by default and do not call AI providers.
 
+mod ai;
 mod error;
 mod health;
+mod mock;
 mod sessions;
 mod state;
 mod timeline;
@@ -37,6 +39,8 @@ pub fn router(state: AppState) -> Router {
         .route("/ws", get(ws::connect))
         .merge(sessions::routes())
         .merge(timeline::routes())
+        .merge(ai::routes())
+        .merge(mock::routes())
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

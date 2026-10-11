@@ -5,6 +5,7 @@ import {
   allowedStatuses,
   deleteSession,
   getSession,
+  mockTurn,
   postAssistantAction,
   postMessage,
   updateSession,
@@ -60,6 +61,19 @@ export function SessionDetailPage() {
     onError: (cause: Error) => setError(cause.message),
   });
 
+  const mock = useMutation({
+    mutationFn: (input: { action: "start" | "answer" | "complete"; text?: string }) =>
+      mockTurn(id, input.action, input.text),
+    onSuccess: async () => {
+      setMessage("");
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ["session", id] });
+      await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+    onError: (cause: Error) => setError(cause.message),
+  });
+
   const explain = useMutation({
     mutationFn: (utteranceId: string) => postAssistantAction(id, utteranceId),
     onSuccess: async () => {
@@ -100,6 +114,34 @@ export function SessionDetailPage() {
       </p>
       {timeline.isLoading && <p className="muted">Loading timeline…</p>}
       {timeline.isError && <p className="error">Could not load timeline.</p>}
+      {current.mode === "mock_interview" && current.status === "ready" && (
+        <button type="button" onClick={() => mock.mutate({ action: "start" })} disabled={mock.isPending}>
+          Start mock interview
+        </button>
+      )}
+      {current.mode === "mock_interview" && current.status === "active" && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            mock.mutate({ action: "answer", text: message });
+          }}
+        >
+          <label>
+            Answer
+            <input value={message} onChange={(event) => setMessage(event.target.value)} />
+          </label>
+          <button type="submit" disabled={mock.isPending || message.trim().length === 0}>
+            Send answer
+          </button>
+          <button
+            type="button"
+            disabled={mock.isPending || message.trim().length === 0}
+            onClick={() => mock.mutate({ action: "complete", text: message })}
+          >
+            Complete interview
+          </button>
+        </form>
+      )}
       {!timeline.isLoading && !timeline.isError && (
         <Timeline
           items={timeline.items}

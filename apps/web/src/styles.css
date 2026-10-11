@@ -1,0 +1,102 @@
+:root {
+  color: #1c1917;
+  background: #f6f3ee;
+  font-family: "Segoe UI", sans-serif;
+  line-height: 1.4;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; }
+
+button, input, select {
+  font: inherit;
+}
+
+a { color: inherit; }
+
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #231f1c;
+  color: #f6f3ee;
+  padding: 20px 16px;
+}
+
+.sidebar h1 {
+  margin: 0 0 20px;
+  font-size: 20px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar a {
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.sidebar a.active,
+.sidebar a:hover {
+  background: #3a332d;
+}
+
+.main {
+  padding: 28px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.list a, .card {
+  display: block;
+  background: white;
+  border: 1px solid #e4ddd4;
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-decoration: none;
+}
+
+.meta { color: #6d645c; font-size: 13px; }
+
+form, .stack {
+  display: grid;
+  gap: 12px;
+  max-width: 460px;
+}
+
+label { display: grid; gap: 4px; }
+
+input, select, button {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cfc6bc;
+}
+
+button {
+  background: #231f1c;
+  color: white;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.error { color: #9f1239; }
+.muted { color: #6d645c; }

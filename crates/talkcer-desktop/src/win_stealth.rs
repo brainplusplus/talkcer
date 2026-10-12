@@ -17,8 +17,9 @@ use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowDisplayAffinity, GetWindowThreadProcessId, SetWindowDisplayAffinity,
-    WDA_EXCLUDEFROMCAPTURE, WDA_MONITOR, WDA_NONE,
+    EnumWindows, GetWindowDisplayAffinity, GetWindowLongPtrW, GetWindowThreadProcessId,
+    SetWindowDisplayAffinity, SetWindowLongPtrW, GWL_EXSTYLE, WDA_EXCLUDEFROMCAPTURE, WDA_MONITOR,
+    WDA_NONE, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 
 /// Exclude (or restore) every top-level window of this process in captures.
@@ -66,6 +67,91 @@ unsafe extern "system" fn visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
             }
         }
     } else if current != WDA_NONE.0 && unsafe { SetWindowDisplayAffinity(hwnd, WDA_NONE) }.is_ok() {
+        sweep.changed += 1;
+    }
+    BOOL(1)
+}
+
+/// Count this process's top-level windows, split by capture exclusion.
+///
+/// Diagnostics only. A live check reads this to confirm the affinity stuck,
+/// which a window title or taskbar button cannot show.
+pub fn exclusion_counts() -> (u32, u32) {
+    let mut tally = Tally {
+        pid: unsafe { GetCurrentProcessId() },
+        excluded: 0,
+        plain: 0,
+    };
+    // SAFETY: `tally` outlives the synchronous EnumWindows call.
+    unsafe {
+        let _ = EnumWindows(Some(count_visit), LPARAM(&mut tally as *mut Tally as isize));
+    }
+    (tally.excluded, tally.plain)
+}
+
+struct Tally {
+    pid: u32,
+    excluded: u32,
+    plain: u32,
+}
+
+unsafe extern "system" fn count_visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let tally = &mut *(lparam.0 as *mut Tally);
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    if pid != tally.pid {
+        return BOOL(1);
+    }
+    let mut current = 0u32;
+    if unsafe { GetWindowDisplayAffinity(hwnd, &mut current) }.is_ok() {
+        if current == WDA_NONE.0 {
+            tally.plain += 1;
+        } else {
+            tally.excluded += 1;
+        }
+    }
+    BOOL(1)
+}
+
+/// Hide or show this process's top-level windows on the taskbar.
+///
+/// `ITaskbarList::DeleteTab` (what `set_skip_taskbar` calls) only lasts until the
+/// window is activated, so it never sticks. `WS_EX_TOOLWINDOW` keeps it off the
+/// taskbar without covering it with an owned window.
+pub fn set_taskbar_visible(visible: bool) -> u32 {
+    let mut sweep = TaskbarSweep {
+        pid: unsafe { GetCurrentProcessId() },
+        visible,
+        changed: 0,
+    };
+    // SAFETY: `sweep` outlives the synchronous EnumWindows call.
+    unsafe {
+        let _ = EnumWindows(Some(taskbar_visit), LPARAM(&mut sweep as *mut TaskbarSweep as isize));
+    }
+    sweep.changed
+}
+
+struct TaskbarSweep {
+    pid: u32,
+    visible: bool,
+    changed: u32,
+}
+
+unsafe extern "system" fn taskbar_visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let sweep = &mut *(lparam.0 as *mut TaskbarSweep);
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    if pid != sweep.pid {
+        return BOOL(1);
+    }
+    let before = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+    let after = if sweep.visible {
+        (before & !WS_EX_TOOLWINDOW.0) | WS_EX_APPWINDOW.0
+    } else {
+        (before & !WS_EX_APPWINDOW.0) | WS_EX_TOOLWINDOW.0
+    };
+    if after != before {
+        unsafe { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, after as isize) };
         sweep.changed += 1;
     }
     BOOL(1)

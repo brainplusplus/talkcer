@@ -136,6 +136,10 @@ async fn sync_loop(handle: AppHandle, stealth: Arc<std::sync::atomic::AtomicBool
             let fingerprint = serde_json::to_value(&preferences).ok();
             if fingerprint.as_ref() != last.as_ref() {
                 last = fingerprint;
+                // Apply both directions. While on, the re-assert loop below keeps
+                // the capture exclusion alive; the restore only happens here, when
+                // the saved flag changes, so it must not be skipped.
+                apply_stealth(&handle, preferences.undetectable);
                 let commands = crate::overlay::plan(&preferences);
                 if let Some(window) = overlay_window(&handle) {
                     if let Err(error) = apply_plan(&window, &commands) {
@@ -223,10 +227,10 @@ fn apply_stealth(handle: &AppHandle, undetectable: bool) {
             StealthCommand::ExcludeFromCapture | StealthCommand::RestoreCapture => {
                 #[cfg(windows)]
                 {
-                    let changed = crate::win_stealth::set_capture_excluded(
-                        matches!(command, StealthCommand::ExcludeFromCapture),
-                    );
-                    eprintln!("stealth: capture exclusion changed {changed} windows");
+                    let exclude = matches!(command, StealthCommand::ExcludeFromCapture);
+                    let changed = crate::win_stealth::set_capture_excluded(exclude);
+                    let (excluded, plain) = crate::win_stealth::exclusion_counts();
+                    eprintln!("stealth: capture exclusion changed {changed}, now {excluded} excluded and {plain} plain");
                 }
             }
             StealthCommand::HideFromTaskbar => {
@@ -257,6 +261,7 @@ fn set_titles(handle: &AppHandle, title: &str) {
 fn tray_visible(handle: &AppHandle, visible: bool) {
     if let Some(icon) = handle.tray_by_id("talkcer") {
         let _ = icon.set_visible(visible);
+        eprintln!("stealth: tray set visible {visible}");
     }
 }
 
@@ -265,9 +270,12 @@ fn tray_visible(handle: &AppHandle, visible: bool) {
 /// The overlay never has one (`skipTaskbar` in the window config), so only the
 /// main window matters. Implemented here so the stealth plan stays free of the
 /// Win32 module.
-fn taskbar_visible(handle: &AppHandle, visible: bool) {
-    if let Some(window) = handle.get_webview_window(MAIN_WINDOW) {
-        let _ = window.set_skip_taskbar(!visible);
+fn taskbar_visible(_handle: &AppHandle, visible: bool) {
+    #[cfg(windows)]
+    {
+        // `set_skip_taskbar` uses DeleteTab, which the shell restores the moment
+        // the window is focused. The extended style survives activation.
+        let _ = crate::win_stealth::set_taskbar_visible(visible);
     }
 }
 
@@ -406,6 +414,8 @@ pub fn run() -> tauri::Result<()> {
                 .text("quit", tray::tray_label(&crate::tray::TrayItem::Quit))
                 .build()?;
             tauri::tray::TrayIconBuilder::with_id("talkcer")
+                .icon(app.default_window_icon().cloned().unwrap())
+                .tooltip("Talkcer")
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "toggle" => {

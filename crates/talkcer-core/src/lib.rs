@@ -12,6 +12,7 @@ pub mod limit;
 pub mod migrate;
 pub mod mock;
 pub mod overlay;
+pub mod profile;
 pub mod voice;
 pub mod remote;
 pub mod screen;
@@ -53,6 +54,10 @@ pub use mock::{MockAction, MockInterviewService, MockTurn, MockTurnResult};
 pub use error::CoreError;
 pub use export::{export_session, ExportFormat, SessionExport};
 pub use limit::RateGate;
+pub use profile::{
+    cv_prompt, parse_cv_fields, read_cv, CareerEntry, CvDraft, CvSource, EducationEntry, Profile,
+    ProfileService, SaveProfile,
+};
 pub use overlay::{
     accept_assistant_result, OverlayPosition, OverlayPreferences, OverlayService, OverlayState, OverlayView,
 };

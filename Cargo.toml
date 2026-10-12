@@ -19,7 +19,7 @@ base64 = "0.22"
 getrandom = "0.2"
 sha2 = "0.10"
 async-trait = "0.1"
-axum = { version = "0.8", features = ["json", "ws"] }
+axum = { version = "0.8", features = ["json", "ws", "multipart"] }
 futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -32,3 +32,4 @@ tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

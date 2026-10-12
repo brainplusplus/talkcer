@@ -48,6 +48,22 @@ a { color: inherit; }
   background: #3a332d;
 }
 
+.nav-label {
+  margin: 16px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+
+.sidebar .meta { color: #a8a29e; padding: 0 10px; }
+
+.stack.wide { max-width: 640px; }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid #cfc6bc; font: inherit; }
+
 .main {
   padding: 28px;
 }

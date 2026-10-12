@@ -161,4 +161,8 @@ pub enum CoreError {
     /// A migration file could not be applied.
     #[error("migration error: {0}")]
     Migration(String),
+
+    /// A profile field or an uploaded CV cannot be used.
+    #[error("invalid profile: {0}")]
+    InvalidProfile(String),
 }

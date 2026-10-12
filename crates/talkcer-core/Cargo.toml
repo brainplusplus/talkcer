@@ -19,6 +19,7 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+zip = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.21"

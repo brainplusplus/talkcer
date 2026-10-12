@@ -7,7 +7,7 @@ use std::sync::Arc;
 use talkcer_core::{
     AiConfigurationService, CaptureDeviceProvider, CaptureService, ConfiguredSttResolver,
     ConfiguredThinkerResolver, ConfiguredTtsResolver, LearningService, MockInterviewService,
-    OverlayService, RateGate, RemoteAccessService, SessionService, SqliteAiConfigurationRepository,
+    OverlayService, ProfileService, RateGate, RemoteAccessService, SessionService, SqliteAiConfigurationRepository,
     SqliteSessionRepository, SqliteTimelineRepository, TimelineService, VoiceService,
     WasapiDeviceProvider,
 };
@@ -34,6 +34,8 @@ pub struct AppState {
     pub remote: RemoteAccessService,
     /// Overlay preferences and the session it follows.
     pub overlay: OverlayService<SqliteTimelineRepository>,
+    /// The one personal profile.
+    pub profile: ProfileService,
     /// Remote request limit. Local requests do not consume it.
     pub rate: Arc<tokio::sync::Mutex<RateGate>>,
     /// Broadcast channel for WebSocket subscribers. Payloads are JSON events.
@@ -115,6 +117,7 @@ impl AppState {
             ),
             remote: RemoteAccessService::new(pool.clone()),
             overlay: OverlayService::new(pool.clone(), timeline.clone()),
+            profile: ProfileService::new(pool.clone()),
             rate: Arc::new(tokio::sync::Mutex::new(RateGate::new(remote_limit))),
             sessions,
             timeline,

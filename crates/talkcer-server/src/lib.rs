@@ -11,6 +11,7 @@ mod health;
 mod learning;
 mod mock;
 mod overlay;
+mod profile;
 mod remote;
 mod screen;
 #[cfg(windows)]
@@ -44,7 +45,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// One port for everything: the API, the WebSocket, and (when
 /// `apps/web/dist` exists) the web app itself. The Vite dev server runs on
 /// 54001 and proxies `/api` and `/ws` here.
-pub const DEFAULT_BIND: &str = "127.0.0.1:54000";
+pub const DEFAULT_BIND: &str = "0.0.0.0:54000";
 
 /// Build the HTTP router.
 ///
@@ -70,6 +71,7 @@ pub fn router(state: AppState, web_dir: Option<PathBuf>) -> Router {
         .merge(capture::routes())
         .merge(remote::routes())
         .merge(overlay::routes())
+        .merge(profile::routes())
         .merge(export::routes());
 
     if let Some(dir) = web_dir.filter(|path| path.is_dir()) {

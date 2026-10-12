@@ -30,18 +30,25 @@ function start() {
   // Restarting must not leave the previous stack serving the same ports.
   stopRecorded();
 
-  console.log("building talkcer-cli (first run compiles, later runs are cached)…");
+  console.log("building talkcer-cli and the desktop shell (first run compiles, later runs are cached)…");
   execFileSync("cargo", ["build", "-p", "talkcer-cli"], { cwd: root, stdio: "inherit" });
+  execFileSync(
+    "cargo",
+    ["build", "-p", "talkcer-desktop", "--features", "tauri-shell", "--bin", "talkcer-desktop"],
+    { cwd: root, stdio: "inherit" },
+  );
 
   const pids = [
     launch("api", resolve(root, "target/debug/talkcer-cli.exe"), ["serve", "--database", "talkcer.sqlite"]),
     launch("web", process.execPath, [resolve(root, "scripts", "web-dev.mjs")]),
+    launch("desktop", resolve(root, "target/debug/talkcer-desktop.exe"), []),
   ];
   writeFileSync(pidFile, pids.join("\n"));
 
-  console.log("api   http://127.0.0.1:54000");
-  console.log("web   http://127.0.0.1:54001");
-  console.log("stop  npm run dev:stop");
+  console.log("api     http://127.0.0.1:54000  (open to the LAN, so a second PC can reach it)");
+  console.log("web     http://127.0.0.1:54001");
+  console.log("desktop window opened");
+  console.log("stop    npm run dev:stop");
 }
 
 function launch(name, file, args, cwd = root) {

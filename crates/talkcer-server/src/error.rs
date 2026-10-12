@@ -43,7 +43,8 @@ impl IntoResponse for ApiError {
             | CoreError::InvalidAudio(_)
             | CoreError::InvalidCapture(_)
             | CoreError::InvalidOverlay(_)
-            | CoreError::InvalidExport(_) => StatusCode::BAD_REQUEST,
+            | CoreError::InvalidExport(_)
+            | CoreError::InvalidProfile(_) => StatusCode::BAD_REQUEST,
             CoreError::AudioDevice(_)
             | CoreError::Transcription(_)
             | CoreError::ProviderUnavailable(_)

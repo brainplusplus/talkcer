@@ -46,8 +46,9 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>, 
 async fn capture_channels_and_remote_gate() {
     let file = path("live-remote");
     let app = app_with_fixture_devices(&file).await;
-    let (status, denied) = call(&app, "GET", "/api/sessions", None, Some("missing")).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "{denied}");
+    // A second computer no longer needs a token, so an unknown one still gets in.
+    let (status, open) = call(&app, "GET", "/api/sessions", None, Some("missing")).await;
+    assert_eq!(status, StatusCode::OK, "{open}");
 
     let (status, pairing) = call(&app, "POST", "/api/remote/pair", Some(json!({ "enabled": true })), None).await;
     assert_eq!(status, StatusCode::OK, "{pairing}");
@@ -109,7 +110,8 @@ async fn capture_channels_and_remote_gate() {
 
     let (_, disabled) = call(&app, "POST", "/api/remote/pair", Some(json!({ "enabled": false })), None).await;
     assert_eq!(disabled["enabled"], false);
-    let (status, rejected) = call(&app, "GET", "/api/sessions", None, Some(token)).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "{rejected}");
+    // Turning pairing off keeps the second computer working. The LAN is the boundary.
+    let (status, still_open) = call(&app, "GET", "/api/sessions", None, Some(token)).await;
+    assert_eq!(status, StatusCode::OK, "{still_open}");
     let _ = std::fs::remove_file(file);
 }

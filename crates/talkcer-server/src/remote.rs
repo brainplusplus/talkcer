@@ -9,7 +9,7 @@ use axum::extract::{ConnectInfo, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::{Json, Router};
-use talkcer_core::{CoreError, PairRequest, Pairing, RemoteStatus};
+use talkcer_core::{PairRequest, Pairing, RemoteStatus};
 
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -34,19 +34,17 @@ async fn pair(
     Ok(Json(pairing))
 }
 
-/// Reject a second computer until pairing is enabled and the token matches.
+/// Let a second computer in without a pairing token.
 ///
-/// # Errors
-///
-/// Returns [`ApiError`] with `401` when the remote client is not authorized.
+/// The gate used to demand a bearer token. That blocked the whole point of a
+/// second PC: opening this app's address on the first PC during a strict live
+/// interview, where the first screen is being shared. The LAN itself is the
+/// boundary, so a remote request is now only counted against the rate limit.
 pub async fn authorize(
     State(state): State<AppState>,
     request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    if request.uri().path().starts_with("/api/remote/") {
-        return Ok(next.run(request).await);
-    }
     let marked_remote = request
         .headers()
         .get("x-talkcer-client")
@@ -56,18 +54,8 @@ pub async fn authorize(
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .is_some_and(|info| !info.0.ip().is_loopback());
-    if !marked_remote && !outside_loopback {
-        return Ok(next.run(request).await);
+    if marked_remote || outside_loopback {
+        state.rate.lock().await.allow("remote")?;
     }
-    let header = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
-    let Some(token) = header.strip_prefix("Bearer ").filter(|token| !token.is_empty()) else {
-        return Err(ApiError(CoreError::Unauthorized));
-    };
-    state.remote.authorize(token).await?;
-    state.rate.lock().await.allow(token)?;
     Ok(next.run(request).await)
 }

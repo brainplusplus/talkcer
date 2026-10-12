@@ -135,8 +135,57 @@ function apiUrl(path: string): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+export function currentSession(): Promise<{ session: Session | null; paused: boolean }> {
+  return request("/api/sessions/current");
+}
+
 export function getHealth(): Promise<{ status: string; app: string; version: string }> {
   return request("/api/health");
+}
+
+export type CareerEntry = { company: string; role: string; period: string; summary: string };
+export type EducationEntry = { institution: string; credential: string; period: string };
+
+export type ProfileInput = {
+  name: string;
+  birth_date: string;
+  birth_place: string;
+  phone: string;
+  email: string;
+  github: string;
+  linkedin: string;
+  career: CareerEntry[];
+  education: EducationEntry[];
+  skills: string[];
+};
+
+export type Profile = ProfileInput & { updated_at: string };
+
+export type CvDraft = {
+  text: string;
+  source: "file_text" | "language_model";
+  warning?: string;
+};
+
+export function getProfile(): Promise<Profile> {
+  return request("/api/profile");
+}
+
+export function saveProfile(profile: ProfileInput): Promise<Profile> {
+  return request("/api/profile", { method: "PUT", body: JSON.stringify(profile) });
+}
+
+/** Read a CV. The file is not stored; the reply is text or filled fields. */
+export async function uploadCv(file: File): Promise<CvDraft> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(apiUrl("/api/profile/cv"), { method: "POST", body });
+  const text = await response.text();
+  const parsed = text ? (JSON.parse(text) as { error?: string }) : {};
+  if (!response.ok) {
+    throw new ApiError(parsed.error ?? response.statusText, response.status);
+  }
+  return parsed as CvDraft;
 }
 
 export function listSessions(mode: SessionMode): Promise<{ sessions: Session[] }> {

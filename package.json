@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs start",
+    "stop": "node scripts/dev.mjs stop",
     "dev:stop": "node scripts/dev.mjs stop"
   }
 }

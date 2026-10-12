@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("serve") => serve(&args[1..]).await,
         Some(other) => bail!("unknown command `{other}`. available: serve"),
-        None => bail!("usage: talkcer-cli serve [--bind 127.0.0.1:54000] [--database talkcer.sqlite] [--web apps/web/dist]"),
+        None => bail!("usage: talkcer-cli serve [--bind 0.0.0.0:54000] [--database talkcer.sqlite] [--web apps/web/dist]"),
     }
 }
 

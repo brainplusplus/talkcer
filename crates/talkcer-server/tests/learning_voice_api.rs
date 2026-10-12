@@ -1,4 +1,4 @@
-//! HTTP tests for learning continuation and browser voice.
+﻿//! HTTP tests for learning continuation and browser voice.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -41,7 +41,7 @@ async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
 #[tokio::test]
 async fn learning_history_survives_reopen() {
     let file = path("learning");
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = router(AppState::connect(&file).await.unwrap(), None);
     let (status, session) = http(
         &app,
         "POST",
@@ -73,7 +73,7 @@ async fn learning_history_survives_reopen() {
     .await;
     drop(app);
 
-    let reopened = router(AppState::connect(&file).await.unwrap());
+    let reopened = router(AppState::connect(&file).await.unwrap(), None);
     let (status, continued) = http(
         &reopened,
         "POST",
@@ -91,7 +91,7 @@ async fn learning_history_survives_reopen() {
 #[tokio::test]
 async fn voice_partial_final_and_tts_playback() {
     let file = path("voice");
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = router(AppState::connect(&file).await.unwrap(), None);
     let (status, session) = http(
         &app,
         "POST",

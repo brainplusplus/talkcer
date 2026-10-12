@@ -1,4 +1,4 @@
-//! End-to-end AI pipeline over the HTTP API.
+﻿//! End-to-end AI pipeline over the HTTP API.
 //!
 //! A saved self-hosted thinker and a self-hosted TTS configuration point at
 //! local mock servers, so these tests verify the whole seam: assistant actions,
@@ -143,7 +143,7 @@ fn remote_configuration(endpoint: &str) -> Value {
 async fn configured_thinker_and_tts_drive_every_ai_route() {
     let file = path("ai-pipeline");
     let (endpoint, seen) = mock_provider_server().await;
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = router(AppState::connect(&file).await.unwrap(), None);
 
     let (status, saved) = call(&app, "PUT", "/api/config/ai", Some(remote_configuration(&endpoint))).await;
     assert_eq!(status, StatusCode::CREATED, "{saved}");

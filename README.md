@@ -8,15 +8,23 @@ AI Conversation Studio. This repository currently contains Task 1 and Task 2 onl
 cargo run --bin talkcer-cli serve
 ```
 
-The API listens on `http://127.0.0.1:8787`.
+The API and the web app share one port: `http://127.0.0.1:54000`. The server serves
+the built web bundle from `apps/web/dist` on that same port with an `index.html`
+fallback, so a client-side route such as `/live/new` loads the app.
 
 ```powershell
 cd apps/web
 npm install
-npm run dev
+npm run build
 ```
 
-Open `http://127.0.0.1:5173`. The dev server proxies `/api` to the Rust server.
+In development the Vite dev server runs on `http://127.0.0.1:54001` and proxies
+`/api` and `/ws` to port 54000.
+
+```powershell
+cd apps/web
+npm run dev
+```
 
 ## Verify
 
@@ -33,7 +41,7 @@ npm run build
 Health check:
 
 ```powershell
-curl.exe http://127.0.0.1:8787/api/health
+curl.exe http://127.0.0.1:54000/api/health
 ```
 
 ## Timeline
@@ -181,4 +189,74 @@ POST /api/overlay/hide
 GET /api/sessions/{id}/export?format=markdown
 ```
 
-The overlay follows one session and stays empty while hidden. `Ctrl+Shift+Space` is the planned shortcut. This build does not open a Tauri window. A cloud provider needs consent, and a paired remote client stops after 30 requests in one process.
+The overlay follows one session and stays empty while hidden. `Ctrl+3` toggles it from anywhere. A cloud provider needs consent, and a paired remote client stops after 30 requests in one process.
+
+## Desktop shell (Tauri)
+
+The native shell is real and builds on Windows with the `tauri-shell` feature. It is
+off by default so the workspace stays headless and CI never needs the WebView2
+toolchain.
+
+```powershell
+# terminal 1: the core API and the web bundle on one port
+cargo run --bin talkcer-cli serve
+
+# terminal 2: the native shell (main window + overlay + tray)
+cargo run -p talkcer-desktop --features tauri-shell --bin talkcer-desktop
+```
+
+The main window loads the web workspace from `http://127.0.0.1:54000/`. Inside the
+shell the web app resolves its API and WebSocket origin to the same port (set
+`VITE_TALKCER_API` to override), and `withGlobalTauri` exposes
+`window.__TAURI__.core.invoke` so the overlay page can ask the shell to move,
+hide, and act on the native window.
+
+The shell:
+
+- opens the web workspace in the main window;
+- keeps a compact, transparent, undecorated overlay as a second window that loads
+  `/overlay-window`, skips the taskbar, and starts hidden;
+- registers five global shortcuts, each independent of window focus. A busy combo
+  fails loudly on stderr but never kills the shell; the tray stays as fallback:
+  - `Ctrl+1` shows or hides the whole application;
+  - `Ctrl+2` toggles undetectable mode: every window is excluded from screen
+    capture (`WDA_EXCLUDEFROMCAPTURE`, re-asserted every 500 ms because the OS
+    can drop it), the taskbar button disappears, and the window title becomes a
+    neutral system name. Toggling off restores all three;
+  - `Ctrl+3` toggles the overlay window;
+  - `Ctrl+4` opens the settings page;
+  - `Ctrl+5` opens the currently running session (its mode and detail), or home
+    when nothing is running;
+- keeps the overlay reachable from a tray menu (toggle/show/hide, open workspace,
+  quit);
+- hides the overlay instead of quitting when its window is closed;
+- polls saved preferences every 500 ms and re-applies the idempotent window plan,
+  so changes made from the web workspace (or any API client) reach the native
+  window;
+- never captures audio and never talks to a provider directly: quick actions
+  (Explain, Translate, Suggest, Hide) go through the core API.
+
+### Manual verification (Windows, WebView2 present)
+
+1. Build the web bundle first: `cd apps/web; npm install; npm run build`.
+2. Start the server and the shell as above. The main window titled *Talkcer*
+   opens and loads the workspace.
+3. Toggle the overlay: `curl.exe -X POST http://127.0.0.1:54000/api/overlay/toggle`.
+   Within half a second the overlay window appears above other windows.
+4. Move it: `curl.exe -X POST -H "content-type: application/json" -d "{\"x\":300,\"y\":400}" http://127.0.0.1:54000/api/overlay/move`.
+   The window moves to exactly (300,400).
+5. Press `Ctrl+1` through `Ctrl+5` with no Talkcer window focused: hide and show
+   the app, toggle undetectable mode, toggle the overlay, open settings, and open
+   the running session. A combo owned by another application prints
+   `shortcut Ctrl+N unavailable` and the rest still work.
+6. Close the overlay window: it hides; the workspace and the tray stay alive.
+7. Quit from the tray to end the process.
+
+One session runs at a time. `GET /api/sessions/current` returns the `active` or
+`paused` session, and activating one session pauses any other active session. The
+session page offers Start, Stop, and Resume.
+
+Verified in this build: all five shortcuts register on a clean machine, the main
+window opens with title *Talkcer*, the overlay window is shown and moved to the
+exact requested coordinates by the sync loop, client-side routes serve as 200 from
+the API port, and all 120 workspace tests plus the web suite pass.

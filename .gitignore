@@ -5,3 +5,11 @@
 *.sqlite
 *.sqlite-journal
 .DS_Store
+# Tauri desktop build artifacts
+/crates/talkcer-desktop/gen
+
+# Local reference checkouts, never committed
+/references
+
+# Dev stack process record
+/logs

@@ -1,4 +1,4 @@
-//! HTTP and WebSocket acceptance tests for Task 3.
+﻿//! HTTP and WebSocket acceptance tests for Task 3.
 
 use std::time::Duration;
 
@@ -62,7 +62,7 @@ where
 #[tokio::test]
 async fn missing_timeline_is_not_found() {
     let path = db_path("missing");
-    let app = router(AppState::connect(&path).await.unwrap());
+    let app = router(AppState::connect(&path).await.unwrap(), None);
     let (status, _) = http(
         &app,
         "GET",
@@ -77,7 +77,7 @@ async fn missing_timeline_is_not_found() {
 #[tokio::test]
 async fn partials_final_websocket_and_assistant_stub() {
     let path = db_path("stream");
-    let app = router(AppState::connect(&path).await.unwrap());
+    let app = router(AppState::connect(&path).await.unwrap(), None);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let served = app.clone();
@@ -229,7 +229,7 @@ async fn partials_final_websocket_and_assistant_stub() {
     assert_eq!(items[2]["metadata"]["target"]["id"], utterance_id);
     assert!(items[2]["metadata"].get("utterance_id").is_none());
 
-    let reread = router(AppState::connect(&path).await.unwrap());
+    let reread = router(AppState::connect(&path).await.unwrap(), None);
     let (status, persisted) = http(
         &reread,
         "GET",

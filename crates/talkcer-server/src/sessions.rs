@@ -7,7 +7,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use talkcer_core::{
     CoreError, CreateSession, Session, SessionFilter, SessionMode, SessionStatus, SessionsByMode,
     UpdateSession,
@@ -20,6 +20,7 @@ use crate::state::AppState;
 /// Session routes mounted under `/api`.
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/api/sessions/current", get(current))
         .route("/api/sessions", get(list).post(create))
         .route(
             "/api/sessions/{id}",
@@ -67,6 +68,38 @@ async fn list(
 
     let sessions = state.sessions.list(&filter).await?;
     Ok(Json(serde_json::json!({ "sessions": sessions })))
+}
+
+/// The one session that is currently running, if any.
+///
+/// "Running" means `active` or `paused`: exactly one session across all modes
+/// may be in those states, enforced on every transition. `paused` still counts
+/// as running so the desktop can resume it; the response says which.
+#[derive(Debug, Serialize)]
+pub struct CurrentSession {
+    /// The running or paused session.
+    pub session: Session,
+    /// `true` when the session is paused and can be resumed.
+    pub paused: bool,
+}
+
+async fn current(State(state): State<AppState>) -> Result<Json<CurrentSession>, ApiError> {
+    for status in [SessionStatus::Active, SessionStatus::Paused] {
+        let matches = state
+            .sessions
+            .list(&SessionFilter {
+                mode: None,
+                status: Some(status),
+            })
+            .await?;
+        if let Some(session) = matches.first() {
+            return Ok(Json(CurrentSession {
+                paused: status == SessionStatus::Paused,
+                session: session.clone(),
+            }));
+        }
+    }
+    Err(ApiError(CoreError::NotFound))
 }
 
 async fn get_one(

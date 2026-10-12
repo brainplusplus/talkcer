@@ -1,11 +1,24 @@
 //! Desktop entry point.
 //!
-//! This build plans the overlay window. It does not open a native window
-//! because the Tauri CLI is not part of the default toolchain.
+//! With the `tauri-shell` feature the native shell runs: it opens the web UI in
+//! the main window and manages the always-on-top overlay. Without the feature
+//! the binary prints the headless plan so the workspace builds without the
+//! WebView2 toolchain.
 
 fn main() {
-    println!("Talkcer desktop shell");
-    println!("API: {}", talkcer_desktop::DEFAULT_API);
-    println!("Overlay shortcut: {}", talkcer_desktop::overlay::OVERLAY_SHORTCUT);
-    println!("The native window is not bundled. Use the /overlay page and the headless window plan.");
+    #[cfg(feature = "tauri-shell")]
+    {
+        if let Err(error) = talkcer_desktop::tauri_shell::run() {
+            eprintln!("desktop shell failed: {error}");
+            std::process::exit(1);
+        }
+    }
+    #[cfg(not(feature = "tauri-shell"))]
+    {
+        println!("Talkcer desktop shell (headless)");
+        println!("API: {}", talkcer_desktop::DEFAULT_API);
+        println!("Workspace: {}", talkcer_desktop::tray::WORKSPACE_URL);
+        println!("Overlay shortcut: {}", talkcer_desktop::overlay::OVERLAY_SHORTCUT);
+        println!("Build with --features tauri-shell to open the native window.");
+    }
 }

@@ -56,7 +56,7 @@ export function allowedStatuses(current: SessionStatus): SessionStatus[] {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
       accept: "application/json",
@@ -73,6 +73,66 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(body.error ?? response.statusText, response.status);
   }
   return body as T;
+}
+
+/**
+ * Where the API lives for this page.
+ *
+ * Served by Vite (dev) or the same origin (web), the relative path is kept.
+ * Inside the desktop shell the page origin is `http://tauri.localhost`, which
+ * has no server, so requests go to the local core API explicitly.
+ *
+ * Pure: exported so tests can cover every origin without a browser.
+ */
+export function resolveApiBase(origin: {
+  host: string;
+  protocol: string;
+  configured?: string;
+}): string {
+  if (origin.configured) {
+    return trimBase(origin.configured);
+  }
+  if (origin.host === "tauri.localhost" || origin.protocol === "tauri:") {
+    return "http://127.0.0.1:54000";
+  }
+  return "";
+}
+
+export function apiBase(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return resolveApiBase({
+    host: window.location.host,
+    protocol: window.location.protocol,
+    configured: import.meta.env.VITE_TALKCER_API,
+  });
+}
+
+function trimBase(base: string): string {
+  return base.replace(/\/+$/, "");
+}
+
+/**
+ * WebSocket origin for this page, mirroring {@link apiBase}.
+ *
+ * `""` means same-origin (Vite dev proxy or a server that hosts the web app);
+ * inside the desktop shell it is the local core API origin.
+ */
+export function wsBase(): string {
+  const base = apiBase();
+  if (!base) {
+    return "";
+  }
+  return base.replace(/^http/, "ws");
+}
+
+function apiUrl(path: string): string {
+  const base = apiBase();
+  if (!base) {
+    return path;
+  }
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export function getHealth(): Promise<{ status: string; app: string; version: string }> {
@@ -302,6 +362,7 @@ export type OverlayPreferences = {
   position_x: number;
   position_y: number;
   active_session_id: string | null;
+  undetectable: boolean;
 };
 
 export function overlayViewPath(): string {
@@ -340,6 +401,10 @@ export function setOverlayClickThrough(enabled: boolean): Promise<OverlayPrefere
   return request("/api/overlay/click-through", { method: "POST", body: JSON.stringify({ enabled }) });
 }
 
+export function setUndetectable(enabled: boolean): Promise<OverlayPreferences> {
+  return request("/api/overlay/undetectable", { method: "POST", body: JSON.stringify({ enabled }) });
+}
+
 export function followOverlaySession(sessionId: string): Promise<OverlayPreferences> {
   return request("/api/overlay", { method: "PUT", body: JSON.stringify({ session_id: sessionId }) });
 }
@@ -349,7 +414,7 @@ export function overlayView(): Promise<{ items: TimelineItem[] }> {
 }
 
 export async function exportSessionBlobUrl(sessionId: string, format: "json" | "markdown"): Promise<string> {
-  const response = await fetch(exportSessionPath(sessionId, format));
+  const response = await fetch(apiUrl(exportSessionPath(sessionId, format)));
   if (!response.ok) {
     throw new ApiError(await response.text(), response.status);
   }
@@ -358,7 +423,7 @@ export async function exportSessionBlobUrl(sessionId: string, format: "json" | "
 }
 
 export async function exportSession(sessionId: string, format: "json" | "markdown"): Promise<string> {
-  const response = await fetch(exportSessionPath(sessionId, format));
+  const response = await fetch(apiUrl(exportSessionPath(sessionId, format)));
   const text = await response.text();
   if (!response.ok) {
     throw new ApiError(text, response.status);
@@ -377,4 +442,92 @@ export function postAssistantAction(
       target: { kind: "utterance", id: utteranceId },
     }),
   });
+}
+
+export type AssistantActionName = "explain" | "translate" | "suggest_points";
+
+export function postNamedAssistantAction(
+  sessionId: string,
+  utteranceId: string,
+  action: AssistantActionName,
+): Promise<{ message: TimelineItem }> {
+  return request(`/api/sessions/${sessionId}/assistant-actions`, {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      target: { kind: "utterance", id: utteranceId },
+    }),
+  });
+}
+
+/**
+ * The desktop shell bridge.
+ *
+ * Inside the Tauri shell the Rust side applies window commands after every
+ * change, so the overlay window moves and hides for real. In a browser the
+ * bridge is absent and the API calls are still made; only the window itself
+ * cannot move.
+ */
+type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+function desktopInvoke(): TauriInvoke | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const scope = window as unknown as {
+    __TAURI__?: { core?: { invoke?: TauriInvoke } };
+  };
+  return scope.__TAURI__?.core?.invoke ?? null;
+}
+
+export function isDesktopShell(): boolean {
+  return desktopInvoke() !== null;
+}
+
+async function invokeDesktop(command: string, args?: Record<string, unknown>): Promise<void> {
+  const invoke = desktopInvoke();
+  if (!invoke) {
+    return;
+  }
+  await invoke(command, args);
+}
+
+export async function showOverlayDesktop(): Promise<OverlayPreferences> {
+  const preferences = await showOverlay();
+  await invokeDesktop("overlay_toggle");
+  return preferences;
+}
+
+export async function hideOverlayDesktop(): Promise<OverlayPreferences> {
+  const preferences = await hideOverlay();
+  await invokeDesktop("overlay_hide");
+  return preferences;
+}
+
+export async function moveOverlayDesktop(x: number, y: number): Promise<OverlayPreferences> {
+  const preferences = await moveOverlay(x, y);
+  await invokeDesktop("overlay_move", { x, y });
+  return preferences;
+}
+
+export async function setOverlayOpacityDesktop(opacity: number): Promise<OverlayPreferences> {
+  const preferences = await setOverlayOpacity(opacity);
+  await invokeDesktop("overlay_opacity", { opacity });
+  return preferences;
+}
+
+export async function setOverlayClickThroughDesktop(enabled: boolean): Promise<OverlayPreferences> {
+  const preferences = await setOverlayClickThrough(enabled);
+  await invokeDesktop("overlay_click_through", { enabled });
+  return preferences;
+}
+
+export async function followOverlaySessionDesktop(sessionId: string): Promise<OverlayPreferences> {
+  const preferences = await followOverlaySession(sessionId);
+  await invokeDesktop("overlay_follow", { sessionId });
+  return preferences;
+}
+
+export async function overlayQuickAction(action: "explain" | "translate" | "suggest" | "hide"): Promise<void> {
+  await invokeDesktop("overlay_quick_action", { action });
 }

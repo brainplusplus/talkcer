@@ -144,6 +144,27 @@ export function SessionDetailPage() {
       <p className="meta">
         {current.mode} · {current.status} · {timeline.connection === "open" ? "Connected" : "Reconnecting…"}
       </p>
+      <div className="row">
+        {(current.status === "ready" || current.status === "paused") && (
+          <button
+            type="button"
+            onClick={() => save.mutate({ status: "active" })}
+            disabled={save.isPending}
+          >
+            {current.status === "paused" ? "Resume" : "Start"}
+          </button>
+        )}
+        {current.status === "active" && (
+          <button
+            type="button"
+            onClick={() => save.mutate({ status: "paused" })}
+            disabled={save.isPending}
+          >
+            Stop
+          </button>
+        )}
+        <span className="meta">Only one session runs at a time. Starting this one pauses any other running session.</span>
+      </div>
       {timeline.isLoading && <p className="muted">Loading timeline…</p>}
       {timeline.isError && <p className="error">Could not load timeline.</p>}
       {current.mode === "mock_interview" && current.status === "ready" && (

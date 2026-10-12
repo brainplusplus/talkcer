@@ -1,4 +1,4 @@
-//! HTTP tests for AI configuration and the text mock interview.
+﻿//! HTTP tests for AI configuration and the text mock interview.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -61,7 +61,7 @@ fn configuration() -> Value {
 #[tokio::test]
 async fn configuration_round_trip_and_provider_catalog() {
     let file = path("config");
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = router(AppState::connect(&file).await.unwrap(), None);
     let (status, providers) = http(&app, "GET", "/api/config/ai/providers", None).await;
     assert_eq!(status, StatusCode::OK);
     assert!(providers.as_array().unwrap().iter().any(|item| item["provider"] == "embedded-stt" && item["capabilities"]["supports_partial_transcript"] == true));
@@ -96,7 +96,7 @@ async fn configuration_round_trip_and_provider_catalog() {
     assert_eq!(tested["ok"], true);
 
     drop(app);
-    let reopened = router(AppState::connect(&file).await.unwrap());
+    let reopened = router(AppState::connect(&file).await.unwrap(), None);
     let (status, listed) = http(&reopened, "GET", "/api/config/ai", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(listed[0]["id"], id);
@@ -107,7 +107,7 @@ async fn configuration_round_trip_and_provider_catalog() {
 #[tokio::test]
 async fn mock_interview_transcript_survives_restart() {
     let file = path("mock");
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = router(AppState::connect(&file).await.unwrap(), None);
     let (status, session) = http(
         &app,
         "POST",
@@ -143,7 +143,7 @@ async fn mock_interview_transcript_survives_restart() {
     assert_eq!(completed["status"], "completed");
 
     drop(app);
-    let reopened = router(AppState::connect(&file).await.unwrap());
+    let reopened = router(AppState::connect(&file).await.unwrap(), None);
     let (status, page) = http(&reopened, "GET", &format!("/api/sessions/{id}/timeline"), None).await;
     assert_eq!(status, StatusCode::OK);
     let turns: Vec<_> = page["items"].as_array().unwrap().iter().map(|item| item["metadata"]["turn"].as_str().unwrap()).collect();

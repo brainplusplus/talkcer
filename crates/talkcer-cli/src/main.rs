@@ -20,13 +20,14 @@ async fn main() -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("serve") => serve(&args[1..]).await,
         Some(other) => bail!("unknown command `{other}`. available: serve"),
-        None => bail!("usage: talkcer-cli serve [--bind 127.0.0.1:8787] [--database talkcer.sqlite]"),
+        None => bail!("usage: talkcer-cli serve [--bind 127.0.0.1:54000] [--database talkcer.sqlite] [--web apps/web/dist]"),
     }
 }
 
 async fn serve(args: &[String]) -> anyhow::Result<()> {
     let mut bind = talkcer_server::DEFAULT_BIND.to_owned();
     let mut database = PathBuf::from("talkcer.sqlite");
+    let mut web = default_web_dir();
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -36,6 +37,9 @@ async fn serve(args: &[String]) -> anyhow::Result<()> {
             "--database" => {
                 database = PathBuf::from(next_value(args, &mut index, "--database")?);
             }
+            "--web" => {
+                web = Some(PathBuf::from(next_value(args, &mut index, "--web")?));
+            }
             other => bail!("unknown argument `{other}`"),
         }
     }
@@ -43,7 +47,23 @@ async fn serve(args: &[String]) -> anyhow::Result<()> {
     let address: SocketAddr = bind
         .parse()
         .with_context(|| format!("invalid --bind address `{bind}`"))?;
-    talkcer_server::serve(database, address).await
+    if let Some(dir) = web.as_ref().filter(|path| path.is_dir()) {
+        tracing::info!(web = %dir.display(), "serving web bundle");
+    }
+    talkcer_server::serve(database, address, web).await
+}
+
+/// Default web bundle location relative to the workspace root.
+///
+/// The CLI runs from the repo root in development, so `apps/web/dist` is the
+/// Vite build output. A missing directory is fine: the API still serves.
+fn default_web_dir() -> Option<PathBuf> {
+    let candidate = PathBuf::from("apps/web/dist");
+    if candidate.is_dir() {
+        Some(candidate)
+    } else {
+        None
+    }
 }
 
 fn next_value(args: &[String], index: &mut usize, flag: &str) -> anyhow::Result<String> {

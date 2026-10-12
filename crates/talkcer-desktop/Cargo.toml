@@ -6,9 +6,35 @@ license.workspace = true
 publish.workspace = true
 description = "Talkcer desktop shell. Overlay window commands are headless until Tauri is installed."
 
+[features]
+# The native Tauri shell. Off by default so the workspace build stays headless
+# and CI never needs the WebView2 toolchain.
+tauri-shell = [
+  "dep:tauri",
+  "dep:tauri-plugin-global-shortcut",
+  "dep:tauri-build",
+  "dep:tokio",
+  "dep:windows",
+]
+
 [dev-dependencies]
 chrono = { workspace = true }
+tokio = { workspace = true }
 
 [dependencies]
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 talkcer-core = { path = "../talkcer-core" }
 talkcer-server = { path = "../talkcer-server" }
+tokio = { workspace = true, optional = true }
+uuid = { workspace = true }
+windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading"], optional = true }
+
+tauri = { version = "2", features = ["tray-icon"], optional = true }
+tauri-plugin-global-shortcut = { version = "2", optional = true }
+
+[build-dependencies]
+tauri-build = { version = "2", optional = true }
+

@@ -118,3 +118,85 @@ button {
 .bubble.partial { border-style: dashed; }
 
 .bubble p { margin: 6px 0; }
+
+/* Overlay window: compact, always on top, and its own page. */
+body[data-overlay="true"] {
+  background: transparent;
+}
+
+.overlay-window {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+  height: 100vh;
+  padding: 8px 10px;
+  background: rgba(24, 21, 19, 0.92);
+  color: #f6f3ee;
+  border: 1px solid #3a332d;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.overlay-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: move;
+}
+
+.overlay-title { font-weight: 600; }
+.overlay-live { margin-left: auto; color: #7dd3fc; font-size: 12px; }
+
+.overlay-head button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  width: auto;
+  padding: 0 6px;
+  font-size: 16px;
+}
+
+.overlay-body {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.overlay-line {
+  border-left: 2px solid #57534e;
+  padding-left: 8px;
+}
+
+.overlay-line.remote { border-color: #7dd3fc; }
+.overlay-line.local_user { border-color: #fbbf24; }
+.overlay-line.ai { border-color: #86efac; }
+
+.overlay-line p { margin: 2px 0 0; }
+.overlay-speaker { font-size: 11px; text-transform: uppercase; color: #a8a29e; }
+
+.overlay-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.overlay-actions button {
+  flex: 1;
+  width: auto;
+  padding: 6px 4px;
+  font-size: 12px;
+  background: #3a332d;
+}
+
+.overlay-desktop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.overlay-desktop input[type="range"] { flex: 1; }
+

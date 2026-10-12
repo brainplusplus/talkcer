@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { getHealth, type SessionMode } from "./api";
 import { AiConfigPage } from "./pages/AiConfigPage";
 import { NewSessionPage } from "./pages/NewSessionPage";
 import { OverlayPage } from "./pages/OverlayPage";
+import { OverlayWindow } from "./pages/OverlayWindow";
+import { PrivacyPage } from "./pages/PrivacyPage";
 import { RemotePage } from "./pages/RemotePage";
 import { SessionDetailPage } from "./pages/SessionDetailPage";
 import { SessionListPage } from "./pages/SessionListPage";
@@ -16,6 +18,12 @@ const NAV: Array<{ to: string; label: string; mode: SessionMode }> = [
 
 export function App() {
   const health = useQuery({ queryKey: ["health"], queryFn: getHealth });
+  const location = useLocation();
+
+  // The overlay window loads its own compact page and no sidebar.
+  if (location.pathname === "/overlay-window") {
+    return <OverlayWindow />;
+  }
 
   return (
     <div className="app">
@@ -28,6 +36,7 @@ export function App() {
             </NavLink>
           ))}
           <NavLink to="/settings/ai">AI</NavLink>
+          <NavLink to="/settings/privacy">Privacy</NavLink>
           <NavLink to="/remote">Remote</NavLink>
           <NavLink to="/overlay">Overlay</NavLink>
         </nav>
@@ -41,6 +50,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/live" replace />} />
           <Route path="/settings/ai" element={<AiConfigPage />} />
+          <Route path="/settings/privacy" element={<PrivacyPage />} />
           <Route path="/remote" element={<RemotePage />} />
           <Route path="/overlay" element={<OverlayPage />} />
           {NAV.map((item) => (

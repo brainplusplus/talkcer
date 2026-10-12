@@ -22,6 +22,7 @@ async fn app_with_fixture_devices(file: &std::path::Path) -> axum::Router {
         AppState::connect_with_capture_provider(file, 30, Arc::new(FixtureDeviceProvider::default_pair()))
             .await
             .unwrap(),
+        None,
     )
 }
 

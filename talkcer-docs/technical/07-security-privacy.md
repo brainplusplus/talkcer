@@ -1,7 +1,7 @@
 # Talkcer — Security & Privacy
 
 ## Defaults
-- Core API bind `127.0.0.1:8787`.
+- Core API bind `127.0.0.1:54000`.
 - Remote access disabled by default.
 - Transcripts stored locally.
 - Raw audio storage disabled by default.

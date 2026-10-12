@@ -1,4 +1,4 @@
-//! End-to-end pipeline test over the HTTP API.
+﻿//! End-to-end pipeline test over the HTTP API.
 //!
 //! A scripted device provider stands in for real audio, and the background pump
 //! drains it into transcripts. This covers the wiring the web client relies on:
@@ -60,7 +60,7 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
 async fn pump_transcribes_scripted_audio_into_the_timeline() {
     let file = path("pipeline-api");
     let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(scripted())).await.unwrap();
-    let app = router(state.clone());
+    let app = router(state.clone(), None);
     let pump = spawn_pump(state);
 
     let (status, session) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Live", "mode": "live_interview" }))).await;
@@ -103,7 +103,7 @@ async fn global_audio_devices_route_reports_the_provider() {
         (device("system_audio"), utf8_pcm("b")),
     ]);
     let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider)).await.unwrap();
-    let app = router(state);
+    let app = router(state, None);
 
     let (status, body) = call(&app, "GET", "/api/devices/audio", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -178,7 +178,7 @@ async fn session_stt_selection_drives_the_pipeline_end_to_end() {
         (device("system_audio"), vec![9_u8; 48_000 * 4]),
     ]);
     let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider)).await.unwrap();
-    let app = router(state.clone());
+    let app = router(state.clone(), None);
     let pump = spawn_pump(state);
 
     // Save a self-hosted STT configuration, then point the session at it.

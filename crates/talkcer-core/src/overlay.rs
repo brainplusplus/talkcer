@@ -50,6 +50,8 @@ pub struct OverlayPreferences {
     pub show_local_transcript: bool,
     /// Include assistant responses.
     pub show_ai_response: bool,
+    /// Keep every shell window out of screen captures.
+    pub undetectable: bool,
     /// Last change.
     pub updated_at: DateTime<Utc>,
 }
@@ -210,6 +212,25 @@ where
         self.load().await
     }
 
+    /// Turn undetectable mode on or off.
+    ///
+    /// This is app-wide: while on, the desktop shell excludes every window from
+    /// screen capture, hides the taskbar button, and disguises the window title.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error when the row cannot be saved.
+    pub async fn set_undetectable(&self, enabled: bool) -> Result<OverlayPreferences, CoreError> {
+        self.ensure().await?;
+        sqlx::query("UPDATE overlay_preferences SET undetectable = ?2, updated_at = ?3 WHERE id = ?1")
+            .bind(ROW_ID)
+            .bind(i64::from(enabled))
+            .bind(Utc::now().to_rfc3339())
+            .execute(&self.pool)
+            .await?;
+        self.load().await
+    }
+
     /// Follow one session. The previous session disappears from the view.
     ///
     /// # Errors
@@ -277,8 +298,8 @@ where
             "INSERT INTO overlay_preferences (
                 id, enabled, always_on_top, opacity, width, height, position_x, position_y,
                 click_through_non_interactive_area, show_remote_transcript, show_local_transcript,
-                show_ai_response, active_session_id, updated_at
-            ) VALUES (?1, 0, 0, 0.95, 420, 320, 40, 40, 0, 1, 1, 1, NULL, ?2)",
+                show_ai_response, active_session_id, undetectable, updated_at
+            ) VALUES (?1, 0, 0, 0.95, 420, 320, 40, 40, 0, 1, 1, 1, NULL, 0, ?2)",
         )
         .bind(ROW_ID)
         .bind(Utc::now().to_rfc3339())
@@ -291,7 +312,7 @@ where
         let row = sqlx::query(
             "SELECT enabled, always_on_top, opacity, width, height, position_x, position_y,
                     click_through_non_interactive_area, show_remote_transcript, show_local_transcript,
-                    show_ai_response, active_session_id, updated_at
+                    show_ai_response, active_session_id, undetectable, updated_at
              FROM overlay_preferences WHERE id = ?1",
         )
         .bind(ROW_ID)
@@ -323,6 +344,7 @@ where
             show_remote_transcript: row.try_get::<i64, _>("show_remote_transcript")? == 1,
             show_local_transcript: row.try_get::<i64, _>("show_local_transcript")? == 1,
             show_ai_response: row.try_get::<i64, _>("show_ai_response")? == 1,
+            undetectable: row.try_get::<i64, _>("undetectable")? == 1,
             updated_at: DateTime::parse_from_rfc3339(&updated)
                 .map(|time| time.with_timezone(&Utc))
                 .map_err(|error| CoreError::Database(sqlx::Error::Decode(Box::new(error))))?,

@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   allowedStatuses,
+  apiBase,
   audioDevicesPath,
   captureDevicesPath,
   capturePath,
   exportSessionPath,
+  isDesktopShell,
   isSessionMode,
   listSessionsPath,
   overlayViewPath,
+  resolveApiBase,
   sessionPath,
   timelinePath,
+  wsBase,
 } from "./api";
 
 describe("session mode", () => {
@@ -44,5 +48,28 @@ describe("api request paths", () => {
     expect(audioDevicesPath()).toBe("/api/devices/audio");
     expect(exportSessionPath("abc-123", "markdown")).toBe("/api/sessions/abc-123/export?format=markdown");
     expect(exportSessionPath("abc-123", "json")).toBe("/api/sessions/abc-123/export?format=json");
+  });
+});
+
+describe("desktop bridge", () => {
+  it("reports no desktop shell without a browser", () => {
+    expect(isDesktopShell()).toBe(false);
+  });
+
+  it("keeps a relative base on a normal origin", () => {
+    expect(resolveApiBase({ host: "localhost:5173", protocol: "http:" })).toBe("");
+  });
+
+  it("maps a tauri origin to the local core API", () => {
+    expect(resolveApiBase({ host: "tauri.localhost", protocol: "http:" })).toBe(
+      "http://127.0.0.1:54000",
+    );
+    expect(wsBase()).toBe(apiBase().replace(/^http/, "ws"));
+  });
+
+  it("honours an explicitly configured API base", () => {
+    expect(
+      resolveApiBase({ host: "anything", protocol: "http:", configured: "http://10.0.0.2:54001/" }),
+    ).toBe("http://10.0.0.2:54001");
   });
 });

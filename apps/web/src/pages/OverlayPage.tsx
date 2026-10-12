@@ -2,14 +2,15 @@ import { FormEvent, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   exportSessionBlobUrl,
-  followOverlaySession,
+  followOverlaySessionDesktop,
   getOverlay,
-  hideOverlay,
-  moveOverlay,
+  hideOverlayDesktop,
+  isDesktopShell,
+  moveOverlayDesktop,
   overlayView,
-  setOverlayClickThrough,
-  setOverlayOpacity,
-  showOverlay,
+  setOverlayClickThroughDesktop,
+  setOverlayOpacityDesktop,
+  showOverlayDesktop,
   toggleOverlay,
 } from "../api";
 
@@ -36,17 +37,17 @@ export function OverlayPage() {
 
   function follow(event: FormEvent) {
     event.preventDefault();
-    change.mutate(() => followOverlaySession(sessionId));
+    change.mutate(() => followOverlaySessionDesktop(sessionId));
   }
 
   function move(event: FormEvent) {
     event.preventDefault();
-    change.mutate(() => moveOverlay(Number.parseInt(x, 10), Number.parseInt(y, 10)));
+    change.mutate(() => moveOverlayDesktop(Number.parseInt(x, 10), Number.parseInt(y, 10)));
   }
 
   function setOpacity(event: FormEvent) {
     event.preventDefault();
-    change.mutate(() => setOverlayOpacity(Number.parseFloat(opacity)));
+    change.mutate(() => setOverlayOpacityDesktop(Number.parseFloat(opacity)));
   }
 
   async function download(format: "json" | "markdown") {
@@ -77,16 +78,21 @@ export function OverlayPage() {
           : "Waiting for preferences…"}
       </p>
       <div className="row">
-        <button type="button" disabled={change.isPending} onClick={() => change.mutate(showOverlay)}>Show</button>
-        <button type="button" disabled={change.isPending} onClick={() => change.mutate(hideOverlay)}>Hide</button>
+        <button type="button" disabled={change.isPending} onClick={() => change.mutate(showOverlayDesktop)}>Show</button>
+        <button type="button" disabled={change.isPending} onClick={() => change.mutate(hideOverlayDesktop)}>Hide</button>
         <button type="button" disabled={change.isPending} onClick={() => change.mutate(toggleOverlay)}>Toggle</button>
-        <button type="button" disabled={change.isPending} onClick={() => change.mutate(() => setOverlayClickThrough(true))}>
+        <button type="button" disabled={change.isPending} onClick={() => change.mutate(() => setOverlayClickThroughDesktop(true))}>
           Click-through on
         </button>
-        <button type="button" disabled={change.isPending} onClick={() => change.mutate(() => setOverlayClickThrough(false))}>
+        <button type="button" disabled={change.isPending} onClick={() => change.mutate(() => setOverlayClickThroughDesktop(false))}>
           Click-through off
         </button>
       </div>
+      <p className="meta">
+        {isDesktopShell()
+          ? "Desktop shell detected: window commands are applied natively."
+          : "Browser mode: preferences are saved, but the native window only moves inside the desktop shell."}
+      </p>
       <form onSubmit={move} className="row">
         <label>
           X

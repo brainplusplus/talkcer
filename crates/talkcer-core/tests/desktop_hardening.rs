@@ -52,6 +52,11 @@ async fn overlay_preferences_persist_and_isolate_sessions() {
     assert_eq!(hidden.state, OverlayState::Hidden);
     assert!(overlay.view().await.unwrap().items.is_empty());
     assert_eq!(overlay.get().await.unwrap().active_session_id, Some(second.id));
+    // Undetectable mode persists independently of the overlay visibility.
+    assert!(!overlay.get().await.unwrap().undetectable);
+    assert!(overlay.set_undetectable(true).await.unwrap().undetectable);
+    assert!(overlay.get().await.unwrap().undetectable);
+    assert!(!overlay.set_undetectable(false).await.unwrap().undetectable);
     let _ = std::fs::remove_file(file);
 }
 

@@ -1,4 +1,4 @@
-//! HTTP tests for overlay state, export, consent, and the remote limit.
+﻿//! HTTP tests for overlay state, export, consent, and the remote limit.
 
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
@@ -28,7 +28,7 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
 #[tokio::test]
 async fn overlay_export_and_remote_limit() {
     let file = path("overlay-api");
-    let app = router(AppState::connect_with_limit(&file, 1).await.unwrap());
+    let app = router(AppState::connect_with_limit(&file, 1).await.unwrap(), None);
     let (status, created) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Live", "mode": "live_interview" }))).await;
     assert_eq!(status, StatusCode::CREATED);
     let id = created["id"].as_str().unwrap();
@@ -67,7 +67,7 @@ async fn overlay_export_and_remote_limit() {
 #[tokio::test]
 async fn export_returns_download_headers_and_json_is_valid() {
     let file = path("export-headers");
-    let app = router(AppState::connect(&file).await.unwrap());
+    let app = router(AppState::connect(&file).await.unwrap(), None);
     let (_, created) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Notes", "mode": "learning" }))).await;
     let id = created["id"].as_str().unwrap();
     let (_, item) = call(

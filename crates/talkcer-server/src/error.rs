@@ -46,7 +46,8 @@ impl IntoResponse for ApiError {
             | CoreError::InvalidExport(_) => StatusCode::BAD_REQUEST,
             CoreError::AudioDevice(_)
             | CoreError::Transcription(_)
-            | CoreError::ProviderUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            | CoreError::ProviderUnavailable(_)
+            | CoreError::Screen(_) => StatusCode::SERVICE_UNAVAILABLE,
             CoreError::Unauthorized => StatusCode::UNAUTHORIZED,
             CoreError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             CoreError::ProviderTimeout => StatusCode::GATEWAY_TIMEOUT,

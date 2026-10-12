@@ -15,6 +15,7 @@ import {
   type SessionStatus,
 } from "../api";
 import { CaptureControls } from "../components/CaptureControls";
+import { ScreenControls } from "../components/ScreenControls";
 import { Timeline } from "../components/Timeline";
 import { VoiceControls } from "../components/VoiceControls";
 import { useTimeline } from "../useTimeline";
@@ -241,6 +242,12 @@ export function SessionDetailPage() {
           }}
         />
       )}
+      <ScreenControls
+        sessionId={current.id}
+        onChange={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+        }}
+      />
       {!timeline.isLoading && !timeline.isError && (
         <Timeline
           items={timeline.items}

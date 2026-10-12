@@ -38,6 +38,10 @@ pub enum CoreError {
     #[error("session not found")]
     NotFound,
 
+    /// A screen could not be captured or read.
+    #[error("screen capture failed: {0}")]
+    Screen(String),
+
     /// No timeline item exists for the given id in this session.
     #[error("timeline item not found")]
     ItemNotFound,

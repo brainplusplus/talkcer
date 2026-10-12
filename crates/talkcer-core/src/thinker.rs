@@ -73,6 +73,14 @@ pub enum ThinkerTask {
         /// Topic from the session context.
         topic: String,
     },
+    /// A question about whatever the current screen shows.
+    ///
+    /// The prompt already names the mode and carries the vision model's reading
+    /// of the screen, so the thinker answers from that text.
+    ScreenContext {
+        /// The full prompt, mode stance included.
+        prompt: String,
+    },
 }
 
 impl ThinkerTask {
@@ -90,6 +98,7 @@ impl ThinkerTask {
             Self::LearningAnswer { .. } => "learning_answer",
             Self::LearningPractice { .. } => "learning_practice",
             Self::LearningFeedback { .. } => "learning_feedback",
+            Self::ScreenContext { .. } => "screen_context",
         }
     }
 
@@ -109,6 +118,9 @@ impl ThinkerTask {
             | Self::LearningPractice { .. }
             | Self::LearningFeedback { .. } => {
                 "You are a patient tutor. Explain briefly and give one concrete example.".to_owned()
+            }
+            Self::ScreenContext { .. } => {
+                "You are answering from what is currently on screen. Stay with the session mode and do not invent details the screen does not show.".to_owned()
             }
         }
     }
@@ -148,6 +160,7 @@ impl ThinkerTask {
             Self::LearningFeedback { topic } => {
                 format!("Give one sentence of feedback on an answer about {topic}.")
             }
+            Self::ScreenContext { prompt } => prompt.clone(),
         }
     }
 }
@@ -216,6 +229,7 @@ impl Thinker for EmbeddedThinker {
             ThinkerTask::LearningFeedback { topic } => {
                 format!("Feedback for {topic}: your answer is specific enough to continue.")
             }
+            ThinkerTask::ScreenContext { prompt } => format!("Stub screen answer: {prompt}"),
         };
         Ok(ThinkerReply { text, provider: self.provider().to_owned() })
     }

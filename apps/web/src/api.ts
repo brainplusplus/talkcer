@@ -316,6 +316,20 @@ export function captureDevices(sessionId: string): Promise<{ devices: CaptureDev
   return request(captureDevicesPath(sessionId));
 }
 
+export function captureScreen(sessionId: string, direct: boolean): Promise<{ reply: TimelineItem | null }> {
+  return request(`/api/sessions/${sessionId}/screen`, {
+    method: "POST",
+    body: JSON.stringify({ direct }),
+  });
+}
+
+export function sendScreen(sessionId: string, note: string): Promise<TimelineItem> {
+  return request(`/api/sessions/${sessionId}/screen/send`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
 export function injectCapture(sessionId: string, channel: "microphone" | "system_audio", text: string): Promise<{ item: TimelineItem }> {
   return request(`/api/sessions/${sessionId}/capture/fixture`, {
     method: "POST",

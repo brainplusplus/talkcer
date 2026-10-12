@@ -4142,6 +4142,7 @@ name = "talkcer-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "futures-util",
@@ -4156,6 +4157,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "uuid",
+ "windows",
 ]
 
 [[package]]

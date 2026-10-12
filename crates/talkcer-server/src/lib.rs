@@ -12,6 +12,9 @@ mod learning;
 mod mock;
 mod overlay;
 mod remote;
+mod screen;
+#[cfg(windows)]
+mod screen_capture;
 mod sessions;
 mod state;
 mod timeline;
@@ -59,6 +62,7 @@ pub fn router(state: AppState, web_dir: Option<PathBuf>) -> Router {
         .route("/ws", get(ws::connect))
         .merge(sessions::routes())
         .merge(timeline::routes())
+        .merge(screen::routes())
         .merge(ai::routes())
         .merge(mock::routes())
         .merge(learning::routes())

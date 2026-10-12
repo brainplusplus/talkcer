@@ -387,6 +387,20 @@ pub trait TimelineRepository: Send + Sync {
         metadata: Value,
     ) -> Result<TimelineItem, CoreError>;
 
+    /// Insert one fully-formed row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::NotFound`] when the session does not exist.
+    async fn add_item(&self, item: TimelineItem) -> Result<TimelineItem, CoreError>;
+
+    /// Replace the metadata of one row.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error when the row cannot be updated.
+    async fn set_metadata(&self, id: Uuid, metadata: Value) -> Result<(), CoreError>;
+
     /// Store the instruction and the assistant response.
     ///
     /// `reply` is the generated text and `provider` names the adapter that
@@ -570,6 +584,23 @@ impl TimelineRepository for SqliteTimelineRepository {
         insert_item(&mut tx, &item).await?;
         tx.commit().await?;
         Ok(item)
+    }
+
+    async fn add_item(&self, item: TimelineItem) -> Result<TimelineItem, CoreError> {
+        let mut tx = self.pool.begin().await?;
+        ensure_session(&mut tx, item.session_id).await?;
+        insert_item(&mut tx, &item).await?;
+        tx.commit().await?;
+        Ok(item)
+    }
+
+    async fn set_metadata(&self, id: Uuid, metadata: Value) -> Result<(), CoreError> {
+        sqlx::query("UPDATE timeline_items SET metadata = ? WHERE id = ?")
+            .bind(metadata.to_string())
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     async fn record_assistant(
@@ -804,6 +835,24 @@ where
         self.repository
             .append_message(session_id, text, metadata)
             .await
+    }
+
+    /// Insert one fully-formed row and return it as stored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::NotFound`] when the session does not exist.
+    pub async fn add_item(&self, item: TimelineItem) -> Result<TimelineItem, CoreError> {
+        self.repository.add_item(item).await
+    }
+
+    /// Replace the metadata of one row.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error when the row cannot be updated.
+    pub async fn set_metadata(&self, id: Uuid, metadata: Value) -> Result<(), CoreError> {
+        self.repository.set_metadata(id, metadata).await
     }
 
     /// Generate one thinker reply for a session.

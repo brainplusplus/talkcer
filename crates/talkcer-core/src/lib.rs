@@ -14,6 +14,7 @@ pub mod mock;
 pub mod overlay;
 pub mod voice;
 pub mod remote;
+pub mod screen;
 pub mod session;
 pub mod speech;
 pub mod thinker;
@@ -58,6 +59,11 @@ pub use overlay::{
 pub use learning::{LearningAction, LearningService, LearningTurn, LearningTurnResult};
 pub use voice::{mock_stt_event, transcript_text, MockSttEvent, SpeakRequest, SpeechAudio, VoiceAudio, VoiceService};
 pub use migrate::{connect_and_migrate, embedded_migrations, MigrationSource};
+pub use screen::{
+    answer_from_screen, is_pending, mark_sent, pending_screens, record_screen, screen_task,
+    HttpVision, ScreenAnswer, ScreenCapturer, ScreenFrame, ScreenIntent, ScreenOutcome,
+    VisionReader,
+};
 pub use session::{
     CreateSession, SessionFilter, SessionRepository, SessionService, SessionsByMode,
     SqliteSessionRepository, UpdateSession,

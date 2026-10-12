@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/overlay/move", axum::routing::post(move_overlay))
         .route("/api/overlay/opacity", axum::routing::post(opacity))
         .route("/api/overlay/click-through", axum::routing::post(click_through))
+        .route("/api/overlay/undetectable", axum::routing::post(undetectable))
         .route("/api/overlay/view", axum::routing::get(view))
 }
 
@@ -79,6 +80,13 @@ async fn click_through(
     Json(body): Json<ClickBody>,
 ) -> Result<Json<OverlayPreferences>, ApiError> {
     Ok(Json(state.overlay.set_click_through(body.enabled).await?))
+}
+
+async fn undetectable(
+    State(state): State<AppState>,
+    Json(body): Json<ClickBody>,
+) -> Result<Json<OverlayPreferences>, ApiError> {
+    Ok(Json(state.overlay.set_undetectable(body.enabled).await?))
 }
 
 async fn follow(

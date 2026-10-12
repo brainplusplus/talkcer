@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   allowedStatuses,
   deleteSession,
+  exportSessionBlobUrl,
   getSession,
   learningTurn,
   mockTurn,
@@ -14,6 +15,7 @@ import {
   type SessionStatus,
 } from "../api";
 import { CaptureControls } from "../components/CaptureControls";
+import { ScreenControls } from "../components/ScreenControls";
 import { Timeline } from "../components/Timeline";
 import { VoiceControls } from "../components/VoiceControls";
 import { useTimeline } from "../useTimeline";
@@ -33,6 +35,21 @@ export function SessionDetailPage() {
   const [title, setTitle] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [exportName, setExportName] = useState("talkcer-session.md");
+
+  async function downloadExport(format: "json" | "markdown") {
+    try {
+      const url = await exportSessionBlobUrl(id, format);
+      if (exportUrl) {
+        URL.revokeObjectURL(exportUrl);
+      }
+      setExportUrl(url);
+      setExportName(format === "json" ? `talkcer-session-${id}.json` : `talkcer-session-${id}.md`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Export failed.");
+    }
+  }
 
   const save = useMutation({
     mutationFn: (next: { title?: string; status?: SessionStatus }) => updateSession(id, next),
@@ -128,6 +145,27 @@ export function SessionDetailPage() {
       <p className="meta">
         {current.mode} · {current.status} · {timeline.connection === "open" ? "Connected" : "Reconnecting…"}
       </p>
+      <div className="row">
+        {(current.status === "ready" || current.status === "paused") && (
+          <button
+            type="button"
+            onClick={() => save.mutate({ status: "active" })}
+            disabled={save.isPending}
+          >
+            {current.status === "paused" ? "Resume" : "Start"}
+          </button>
+        )}
+        {current.status === "active" && (
+          <button
+            type="button"
+            onClick={() => save.mutate({ status: "paused" })}
+            disabled={save.isPending}
+          >
+            Stop
+          </button>
+        )}
+        <span className="meta">Only one session runs at a time. Starting this one pauses any other running session.</span>
+      </div>
       {timeline.isLoading && <p className="muted">Loading timeline…</p>}
       {timeline.isError && <p className="error">Could not load timeline.</p>}
       {current.mode === "mock_interview" && current.status === "ready" && (
@@ -204,6 +242,12 @@ export function SessionDetailPage() {
           }}
         />
       )}
+      <ScreenControls
+        sessionId={current.id}
+        onChange={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
+        }}
+      />
       {!timeline.isLoading && !timeline.isError && (
         <Timeline
           items={timeline.items}
@@ -220,6 +264,11 @@ export function SessionDetailPage() {
           {send.isPending ? "Sending…" : "Send"}
         </button>
       </form>
+      <div className="row">
+        <button type="button" onClick={() => void downloadExport("markdown")}>Download Markdown</button>
+        <button type="button" onClick={() => void downloadExport("json")}>Download JSON</button>
+        {exportUrl && <a href={exportUrl} download={exportName}>Save {exportName}</a>}
+      </div>
       <form onSubmit={onSave}>
         <label>
           Title

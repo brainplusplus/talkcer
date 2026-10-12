@@ -1,4 +1,4 @@
-//! HTTP acceptance tests for Task 1 health and Task 2 session CRUD.
+﻿//! HTTP acceptance tests for Task 1 health and Task 2 session CRUD.
 
 use std::path::PathBuf;
 
@@ -19,7 +19,7 @@ fn db_path() -> PathBuf {
 async fn app() -> axum::Router {
     let path = db_path();
     let state = AppState::connect(&path).await.unwrap();
-    router(state)
+    router(state, None)
 }
 
 async fn json_response(response: axum::http::Response<Body>) -> (StatusCode, Value) {
@@ -88,7 +88,7 @@ async fn session_crud_and_grouping() {
             .header("content-type", "application/json")
             .body(Body::from(
                 json!({
-                    "title": "Backend Engineer — Acme",
+                    "title": "Backend Engineer â€” Acme",
                     "mode": "live_interview",
                     "context": {"role": "Senior Backend Engineer", "company": "Acme", "language": "en"},
                     "configuration": {"stt": "default", "thinker": "default", "tts": "disabled"}
@@ -110,7 +110,7 @@ async fn session_crud_and_grouping() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(loaded["title"], "Backend Engineer — Acme");
+    assert_eq!(loaded["title"], "Backend Engineer â€” Acme");
 
     send(
         &app,

@@ -1,3 +1,4 @@
+import { wsBase } from "./api";
 import { reconnectDelayMs, type ServerEvent } from "./timeline";
 
 export type ConnectionState = "open" | "reconnecting";
@@ -12,8 +13,12 @@ export function openSessionSocket(
   let attempt = 0;
   let timer = 0;
   let socket: WebSocket | undefined;
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const url = `${protocol}//${window.location.host}/ws?session_id=${sessionId}`;
+  const base = wsBase();
+  // Inside the desktop shell the page origin has no server, so the socket
+  // points at the local core API like every other request.
+  const url = base
+    ? `${base}/ws?session_id=${sessionId}`
+    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws?session_id=${sessionId}`;
 
   const connect = () => {
     socket = new WebSocket(url);

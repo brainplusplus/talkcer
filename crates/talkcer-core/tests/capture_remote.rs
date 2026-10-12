@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use talkcer_core::{
     connect_and_migrate, CaptureAction, CaptureFixture, CaptureService, CaptureState, CreateSession,
-    RemoteAccessService, SessionMode, SessionService, SqliteSessionRepository, SqliteTimelineRepository,
-    TimelineQuery, TimelineService,
+    FixtureDeviceProvider, RemoteAccessService, SessionMode, SessionService, SqliteSessionRepository,
+    SqliteTimelineRepository, TimelineQuery, TimelineService,
 };
 use uuid::Uuid;
 
@@ -9,6 +11,17 @@ fn path(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join("talkcer-tests");
     std::fs::create_dir_all(&dir).unwrap();
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
+}
+
+fn fixture_capture(
+    pool: &sqlx::SqlitePool,
+) -> CaptureService<SqliteSessionRepository, SqliteTimelineRepository> {
+    CaptureService::with_provider(
+        SessionService::new(SqliteSessionRepository::new(pool.clone())),
+        TimelineService::new(SqliteTimelineRepository::new(pool.clone())),
+        pool.clone(),
+        Arc::new(FixtureDeviceProvider::default_pair()),
+    )
 }
 
 #[tokio::test]
@@ -25,12 +38,13 @@ async fn windows_capture_keeps_channels_separate_and_recovers() {
         })
         .await
         .unwrap();
-    let capture = CaptureService::new(
-        sessions,
-        TimelineService::new(SqliteTimelineRepository::new(pool.clone())),
-        pool.clone(),
-    );
-    assert_eq!(capture.control(session.id, CaptureAction::Start).await.unwrap().state, CaptureState::Capturing);
+    let capture = fixture_capture(&pool);
+    let started = capture.control(session.id, CaptureAction::Start).await.unwrap();
+    assert_eq!(started.state, CaptureState::Capturing);
+    assert_eq!(started.devices.len(), 2);
+    assert_eq!(started.devices[0].channel, "microphone");
+    assert_eq!(started.devices[1].channel, "system_audio");
+    assert_eq!(started.devices[1].direction, "render_loopback");
     let local = capture
         .inject(session.id, CaptureFixture {
             channel: "microphone".to_owned(),

@@ -38,6 +38,10 @@ pub enum CoreError {
     #[error("session not found")]
     NotFound,
 
+    /// A screen could not be captured or read.
+    #[error("screen capture failed: {0}")]
+    Screen(String),
+
     /// No timeline item exists for the given id in this session.
     #[error("timeline item not found")]
     ItemNotFound,
@@ -117,6 +121,18 @@ pub enum CoreError {
     /// A live capture action is not legal in the current state.
     #[error("invalid capture action: {0}")]
     InvalidCapture(String),
+
+    /// A native audio device could not be enumerated, opened, or read.
+    #[error("audio device error: {0}")]
+    AudioDevice(String),
+
+    /// The audio pipeline could not turn a speech run into text.
+    #[error("transcription failed: {0}")]
+    Transcription(String),
+
+    /// A thinker, speech, or other provider call failed.
+    #[error("provider unavailable: {0}")]
+    ProviderUnavailable(String),
 
     /// Remote access is disabled or the pairing token is wrong.
     #[error("remote access denied")]

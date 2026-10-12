@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { listSessions, type SessionMode } from "../api";
+import { listSessions, listSessionsPath, type SessionMode } from "../api";
 
 const SLUG: Record<SessionMode, string> = {
   live_interview: "live",
@@ -28,7 +28,7 @@ export function SessionListPage({ mode, label }: { mode: SessionMode; label: str
       {sessions.data && sessions.data.sessions.length > 0 && (
         <ul className="list">
           {sessions.data.sessions.map((session) => (
-            <li key={session.id}>
+            <li key={session.id} data-testid="session-link">
               <Link to={`/${SLUG[session.mode]}/${session.id}`}>
                 <strong>{session.title}</strong>
                 <div className="meta">{session.status}</div>
@@ -37,6 +37,7 @@ export function SessionListPage({ mode, label }: { mode: SessionMode; label: str
           ))}
         </ul>
       )}
+      <p className="meta">API endpoint: <code>{listSessionsPath(mode)}</code></p>
     </section>
   );
 }

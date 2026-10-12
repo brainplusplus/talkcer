@@ -144,7 +144,7 @@ async fn assistant_action(
         session_id = %id,
         message_id = %result.message.id,
         action = body.action.as_str(),
-        "assistant stub stored"
+        "assistant reply stored"
     );
     publish_assistant(&state, id, &result.message);
     Ok((

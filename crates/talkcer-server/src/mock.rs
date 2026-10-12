@@ -1,7 +1,8 @@
 //! Text mock interview HTTP route.
 //!
-//! The controller does not call an LLM. It stores each generated row and
-//! broadcasts the existing assistant events for AI output.
+//! The controller stores each generated row and broadcasts the existing
+//! assistant events for AI output. Text comes from the session's configured
+//! thinker, falling back to the embedded offline templates.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;

@@ -1,6 +1,6 @@
 # Talkcer — API Specification
 
-Base URL: `http://127.0.0.1:8787/api`
+Base URL: `http://127.0.0.1:54000/api`
 
 ## Health
 ```http

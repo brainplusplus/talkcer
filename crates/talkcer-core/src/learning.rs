@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::domain::{SessionMode, SessionStatus};
 use crate::error::CoreError;
 use crate::session::{SessionRepository, SessionService, UpdateSession};
+use crate::thinker::ThinkerTask;
 use crate::timeline::{
     ItemKind, Purpose, Speaker, TimelineItem, TimelineRepository, TimelineService,
 };
@@ -111,34 +112,35 @@ where
             .context
             .get("topic")
             .and_then(Value::as_str)
-            .unwrap_or("the selected topic");
+            .unwrap_or("the selected topic")
+            .to_owned();
         match input.action {
-            LearningAction::Start => self.start(session_id, session.status, topic).await,
+            LearningAction::Start => self.start(&session, topic).await,
             LearningAction::Discuss => {
                 self.require_active(session.status, "discuss")?;
                 let text = required_text(input.text)?;
-                self.discuss(session_id, topic, &text).await
+                self.discuss(&session, topic, &text).await
             }
             LearningAction::Answer => {
                 self.require_active(session.status, "answer")?;
                 let text = required_text(input.text)?;
-                self.answer(session_id, topic, &text).await
+                self.answer(&session, topic, &text).await
             }
         }
     }
 
     async fn start(
         &self,
-        session_id: Uuid,
-        status: SessionStatus,
-        topic: &str,
+        session: &crate::domain::Session,
+        topic: String,
     ) -> Result<LearningTurnResult, CoreError> {
-        if status != SessionStatus::Ready {
+        if session.status != SessionStatus::Ready {
             return Err(CoreError::InvalidLearningAction(format!(
                 "start requires ready, found {}",
-                status.as_str()
+                session.status.as_str()
             )));
         }
+        let session_id = session.id;
         self.sessions
             .update(
                 session_id,
@@ -148,6 +150,9 @@ where
                 },
             )
             .await?;
+        let intro = self
+            .think(session, ThinkerTask::LearningIntro { topic: topic.clone() })
+            .await?;
         let discussion = self
             .append(
                 session_id,
@@ -155,8 +160,11 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "discussion",
-                &format!("Let's study {topic}. Ask a question when you are ready."),
+                &intro,
             )
+            .await?;
+        let practice_text = self
+            .think(session, ThinkerTask::LearningStartPractice { topic })
             .await?;
         let practice = self
             .append(
@@ -165,7 +173,7 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "practice",
-                &format!("Practice: explain one way to improve {topic}."),
+                &practice_text,
             )
             .await?;
         Ok(LearningTurnResult {
@@ -176,10 +184,11 @@ where
 
     async fn discuss(
         &self,
-        session_id: Uuid,
-        topic: &str,
+        session: &crate::domain::Session,
+        topic: String,
         text: &str,
     ) -> Result<LearningTurnResult, CoreError> {
+        let session_id = session.id;
         let question = self
             .append(
                 session_id,
@@ -190,6 +199,15 @@ where
                 text,
             )
             .await?;
+        let answer_text = self
+            .think(
+                session,
+                ThinkerTask::LearningAnswer {
+                    topic: topic.clone(),
+                    question: text.to_owned(),
+                },
+            )
+            .await?;
         let answer = self
             .append(
                 session_id,
@@ -197,8 +215,11 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "discussion",
-                &format!("For {topic}, start from the question: {text}"),
+                &answer_text,
             )
+            .await?;
+        let practice_text = self
+            .think(session, ThinkerTask::LearningPractice { topic })
             .await?;
         let practice = self
             .append(
@@ -207,7 +228,7 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "practice",
-                &format!("Practice: name one tradeoff in {topic}."),
+                &practice_text,
             )
             .await?;
         Ok(LearningTurnResult {
@@ -218,10 +239,11 @@ where
 
     async fn answer(
         &self,
-        session_id: Uuid,
-        topic: &str,
+        session: &crate::domain::Session,
+        topic: String,
         text: &str,
     ) -> Result<LearningTurnResult, CoreError> {
+        let session_id = session.id;
         let answer = self
             .append(
                 session_id,
@@ -232,6 +254,9 @@ where
                 text,
             )
             .await?;
+        let feedback_text = self
+            .think(session, ThinkerTask::LearningFeedback { topic })
+            .await?;
         let feedback = self
             .append(
                 session_id,
@@ -239,13 +264,23 @@ where
                 Speaker::Ai,
                 Purpose::AssistantResponse,
                 "feedback",
-                &format!("Feedback for {topic}: your answer is specific enough to continue."),
+                &feedback_text,
             )
             .await?;
         Ok(LearningTurnResult {
             status: SessionStatus::Active,
             items: vec![answer, feedback],
         })
+    }
+
+    /// Ask the session's configured thinker for one text reply.
+    async fn think(
+        &self,
+        session: &crate::domain::Session,
+        task: ThinkerTask,
+    ) -> Result<String, CoreError> {
+        let reply = self.timeline.think(session, &task).await?;
+        Ok(reply.text)
     }
 
     fn require_active(&self, status: SessionStatus, action: &str) -> Result<(), CoreError> {

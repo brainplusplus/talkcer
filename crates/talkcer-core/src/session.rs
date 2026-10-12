@@ -263,6 +263,22 @@ where
         self.repository.list(filter).await
     }
 
+    /// The one session that is currently running (`active`), if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error when the query fails.
+    pub async fn running(&self) -> Result<Option<Session>, CoreError> {
+        let active = self
+            .repository
+            .list(&SessionFilter {
+                mode: None,
+                status: Some(SessionStatus::Active),
+            })
+            .await?;
+        Ok(active.into_iter().next())
+    }
+
     /// Group every session by mode, newest update first inside each group.
     ///
     /// # Errors
@@ -313,7 +329,39 @@ where
         }
         session.updated_at = Utc::now();
         self.repository.update(&session).await?;
+        // Exactly one session may run at a time: activating this one pauses
+        // every other active session first. The UI uses this to offer stop and
+        // resume on the single running mode.
+        if session.status == SessionStatus::Active {
+            self.pause_other_active(&session.id).await?;
+        }
         Ok(session)
+    }
+
+    /// Pause every `active` session except `keep`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error when a read or write fails.
+    pub async fn pause_other_active(&self, keep: &Uuid) -> Result<Vec<Session>, CoreError> {
+        let active = self
+            .repository
+            .list(&SessionFilter {
+                mode: None,
+                status: Some(SessionStatus::Active),
+            })
+            .await?;
+        let mut paused = Vec::new();
+        for mut other in active {
+            if &other.id == keep {
+                continue;
+            }
+            other.status = SessionStatus::Paused;
+            other.updated_at = Utc::now();
+            self.repository.update(&other).await?;
+            paused.push(other);
+        }
+        Ok(paused)
     }
 
     /// Delete a session.

@@ -1,7 +1,7 @@
-//! HTTP tests for overlay state, export, consent, and the remote limit.
+﻿//! HTTP tests for overlay state, export, consent, and the remote limit.
 
 use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::{header, Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use talkcer_server::{router, AppState};
@@ -28,7 +28,7 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
 #[tokio::test]
 async fn overlay_export_and_remote_limit() {
     let file = path("overlay-api");
-    let app = router(AppState::connect_with_limit(&file, 1).await.unwrap());
+    let app = router(AppState::connect_with_limit(&file, 1).await.unwrap(), None);
     let (status, created) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Live", "mode": "live_interview" }))).await;
     assert_eq!(status, StatusCode::CREATED);
     let id = created["id"].as_str().unwrap();
@@ -61,6 +61,64 @@ async fn overlay_export_and_remote_limit() {
     let second = remote(&app, token).await;
     assert_eq!(first, StatusCode::OK);
     assert_eq!(second, StatusCode::TOO_MANY_REQUESTS);
+    let _ = std::fs::remove_file(file);
+}
+
+#[tokio::test]
+async fn export_returns_download_headers_and_json_is_valid() {
+    let file = path("export-headers");
+    let app = router(AppState::connect(&file).await.unwrap(), None);
+    let (_, created) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Notes", "mode": "learning" }))).await;
+    let id = created["id"].as_str().unwrap();
+    let (_, item) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/messages"),
+        Some(json!({ "kind": "user_message", "text": "Backoff question", "metadata": {} })),
+    ).await;
+    assert!(item["text"].as_str().unwrap_or_default().contains("Backoff"));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/sessions/{id}/export?format=json"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE).and_then(|value| value.to_str().ok()),
+        Some("application/json")
+    );
+    let disposition = response
+        .headers()
+        .get(header::CONTENT_DISPOSITION)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    assert!(disposition.contains("attachment"), "{disposition}");
+    assert!(disposition.contains(&format!("talkcer-session-{id}.json")), "{disposition}");
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let document: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(document["session"]["id"], id);
+    assert!(document["items"].as_array().unwrap().iter().any(|entry| entry["text"] == "Backoff question"));
+
+    let bad = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/sessions/{id}/export?format=pdf"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
     let _ = std::fs::remove_file(file);
 }
 

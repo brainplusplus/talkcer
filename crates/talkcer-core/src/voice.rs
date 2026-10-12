@@ -2,8 +2,11 @@
 //!
 //! The mock STT adapter accepts text or UTF-8 audio chunks so tests do not
 //! need a microphone. Browser capture is stored as `microphone` on the
-//! timeline and `browser_mic` in metadata. TTS returns a local WAV and does
-//! not call a provider.
+//! timeline and `browser_mic` in metadata. TTS is resolved per session: the
+//! embedded adapter returns a local WAV, and a saved configuration can point at
+//! an OpenAI-compatible speech endpoint.
+
+use std::sync::Arc;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -63,11 +66,12 @@ pub struct MockSttEvent {
     pub is_final: bool,
 }
 
-/// Mock speech-to-text and local speech synthesis.
+/// Mock speech-to-text and configurable speech synthesis.
 #[derive(Clone)]
 pub struct VoiceService<S, T> {
     sessions: crate::session::SessionService<S>,
     timeline: TimelineService<T>,
+    tts: Arc<dyn crate::speech::TtsResolver>,
 }
 
 impl<S, T> VoiceService<S, T>
@@ -75,10 +79,28 @@ where
     S: SessionRepository,
     T: TimelineRepository,
 {
-    /// Build a voice service over the existing stores.
+    /// Build a voice service over the existing stores with the embedded TTS.
     #[must_use]
     pub fn new(sessions: crate::session::SessionService<S>, timeline: TimelineService<T>) -> Self {
-        Self { sessions, timeline }
+        Self {
+            sessions,
+            timeline,
+            tts: Arc::new(crate::speech::EmbeddedTtsResolver),
+        }
+    }
+
+    /// Build a voice service that resolves TTS from the session configuration.
+    #[must_use]
+    pub fn with_tts(
+        sessions: crate::session::SessionService<S>,
+        timeline: TimelineService<T>,
+        tts: Arc<dyn crate::speech::TtsResolver>,
+    ) -> Self {
+        Self {
+            sessions,
+            timeline,
+            tts,
+        }
     }
 
     /// Convert one mock audio update into a transcript row.
@@ -136,11 +158,14 @@ where
         if text.is_empty() {
             return Err(CoreError::EmptyText);
         }
-        let wav = tone_wav(text);
+        let tts = self.tts.resolve(&session).await?;
+        let output = tts.synthesize(text).await?;
         Ok(SpeechAudio {
             enabled: true,
-            content_type: Some("audio/wav".to_owned()),
-            audio_base64: Some(base64::engine::general_purpose::STANDARD.encode(wav)),
+            content_type: Some(output.content_type),
+            audio_base64: Some(
+                base64::engine::general_purpose::STANDARD.encode(output.bytes),
+            ),
         })
     }
 }
@@ -187,29 +212,3 @@ fn tts_enabled(session: &Session) -> bool {
     session.configuration.get("tts").and_then(Value::as_str) == Some("enabled")
 }
 
-fn tone_wav(text: &str) -> Vec<u8> {
-    let samples = 800_u32;
-    let mut body = Vec::with_capacity(samples as usize * 2);
-    let scale = (text.len() % 12 + 1) as f32;
-    for index in 0..samples {
-        let angle = index as f32 * scale * 0.05;
-        let sample = (angle.sin() * 3000.0) as i16;
-        body.extend(sample.to_le_bytes());
-    }
-    let data_size = body.len() as u32;
-    let mut wav = Vec::with_capacity(44 + body.len());
-    wav.extend(b"RIFF");
-    wav.extend((36 + data_size).to_le_bytes());
-    wav.extend(b"WAVEfmt ");
-    wav.extend(16_u32.to_le_bytes());
-    wav.extend(1_u16.to_le_bytes());
-    wav.extend(1_u16.to_le_bytes());
-    wav.extend(8_000_u32.to_le_bytes());
-    wav.extend(16_000_u32.to_le_bytes());
-    wav.extend(2_u16.to_le_bytes());
-    wav.extend(16_u16.to_le_bytes());
-    wav.extend(b"data");
-    wav.extend(data_size.to_le_bytes());
-    wav.extend(body);
-    wav
-}

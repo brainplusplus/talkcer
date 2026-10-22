@@ -24,19 +24,47 @@ async fn overlay_preferences_persist_and_isolate_sessions() {
     let timeline = TimelineService::new(SqliteTimelineRepository::new(pool.clone()));
     let overlay = OverlayService::new(pool, timeline.clone());
 
-    let first = sessions.create(CreateSession { title: "A".into(), mode: SessionMode::LiveInterview, context: serde_json::json!({}), configuration: serde_json::json!({}) }).await.unwrap();
-    let second = sessions.create(CreateSession { title: "B".into(), mode: SessionMode::LiveInterview, context: serde_json::json!({}), configuration: serde_json::json!({}) }).await.unwrap();
-    timeline.upsert_transcript(first.id, line(Speaker::Remote, "from a")).await.unwrap();
-    timeline.upsert_transcript(second.id, line(Speaker::Ai, "from b")).await.unwrap();
+    let first = sessions
+        .create(CreateSession {
+            title: "A".into(),
+            mode: SessionMode::LiveInterview,
+            context: serde_json::json!({}),
+            configuration: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    let second = sessions
+        .create(CreateSession {
+            title: "B".into(),
+            mode: SessionMode::LiveInterview,
+            context: serde_json::json!({}),
+            configuration: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    timeline
+        .upsert_transcript(first.id, line(Speaker::Remote, "from a"))
+        .await
+        .unwrap();
+    timeline
+        .upsert_transcript(second.id, line(Speaker::Ai, "from b"))
+        .await
+        .unwrap();
 
     assert_eq!(overlay.get().await.unwrap().state, OverlayState::Hidden);
     let shown = overlay.show().await.unwrap();
     assert_eq!(shown.state, OverlayState::Visible);
     assert!(shown.always_on_top);
-    let moved = overlay.move_to(talkcer_core::OverlayPosition { x: 80, y: 120 }).await.unwrap();
+    let moved = overlay
+        .move_to(talkcer_core::OverlayPosition { x: 80, y: 120 })
+        .await
+        .unwrap();
     assert_eq!((moved.position_x, moved.position_y), (80, 120));
     assert!((overlay.set_opacity(0.4).await.unwrap().opacity - 0.4).abs() < f64::EPSILON);
-    assert_eq!(overlay.set_click_through(true).await.unwrap().state, OverlayState::ClickThrough);
+    assert_eq!(
+        overlay.set_click_through(true).await.unwrap().state,
+        OverlayState::ClickThrough
+    );
     overlay.follow(first.id).await.unwrap();
     let first_view = overlay.view().await.unwrap();
     assert_eq!(first_view.items.len(), 1);
@@ -44,14 +72,23 @@ async fn overlay_preferences_persist_and_isolate_sessions() {
 
     overlay.follow(second.id).await.unwrap();
     let second_view = overlay.view().await.unwrap();
-    assert!(second_view.items.iter().all(|item| item.session_id == second.id));
-    assert!(second_view.items.iter().all(|item| !item.text.contains("from a")));
+    assert!(second_view
+        .items
+        .iter()
+        .all(|item| item.session_id == second.id));
+    assert!(second_view
+        .items
+        .iter()
+        .all(|item| !item.text.contains("from a")));
     assert!(!accept_assistant_result(second.id, first.id));
 
     let hidden = overlay.hide().await.unwrap();
     assert_eq!(hidden.state, OverlayState::Hidden);
     assert!(overlay.view().await.unwrap().items.is_empty());
-    assert_eq!(overlay.get().await.unwrap().active_session_id, Some(second.id));
+    assert_eq!(
+        overlay.get().await.unwrap().active_session_id,
+        Some(second.id)
+    );
     // Undetectable mode persists independently of the overlay visibility.
     assert!(!overlay.get().await.unwrap().undetectable);
     assert!(overlay.set_undetectable(true).await.unwrap().undetectable);
@@ -66,12 +103,27 @@ async fn export_is_readable_and_limits_stop_late_work() {
     let pool = connect_and_migrate(&file).await.unwrap();
     let sessions = SessionService::new(SqliteSessionRepository::new(pool.clone()));
     let timeline = TimelineService::new(SqliteTimelineRepository::new(pool));
-    let session = sessions.create(CreateSession { title: "Notes".into(), mode: SessionMode::Learning, context: serde_json::json!({}), configuration: serde_json::json!({}) }).await.unwrap();
-    timeline.upsert_transcript(session.id, line(Speaker::LocalUser, "What is backoff?")).await.unwrap();
+    let session = sessions
+        .create(CreateSession {
+            title: "Notes".into(),
+            mode: SessionMode::Learning,
+            context: serde_json::json!({}),
+            configuration: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    timeline
+        .upsert_transcript(session.id, line(Speaker::LocalUser, "What is backoff?"))
+        .await
+        .unwrap();
 
-    let json = export_session(&sessions, &timeline, session.id, ExportFormat::Json).await.unwrap();
+    let json = export_session(&sessions, &timeline, session.id, ExportFormat::Json)
+        .await
+        .unwrap();
     assert!(json.body.contains("What is backoff?"));
-    let markdown = export_session(&sessions, &timeline, session.id, ExportFormat::Markdown).await.unwrap();
+    let markdown = export_session(&sessions, &timeline, session.id, ExportFormat::Markdown)
+        .await
+        .unwrap();
     assert!(markdown.body.starts_with("# Notes"));
     assert!(markdown.body.contains("local_user: What is backoff?"));
 
@@ -80,12 +132,18 @@ async fn export_is_readable_and_limits_stop_late_work() {
         Ok::<(), talkcer_core::CoreError>(())
     })
     .await;
-    assert!(matches!(timed_out, Err(talkcer_core::CoreError::ProviderTimeout)));
+    assert!(matches!(
+        timed_out,
+        Err(talkcer_core::CoreError::ProviderTimeout)
+    ));
 
     let mut gate = RateGate::new(2);
     assert!(gate.allow("token").is_ok());
     assert!(gate.allow("token").is_ok());
-    assert!(matches!(gate.allow("token"), Err(talkcer_core::CoreError::RateLimited)));
+    assert!(matches!(
+        gate.allow("token"),
+        Err(talkcer_core::CoreError::RateLimited)
+    ));
     let _ = std::fs::remove_file(file);
 }
 

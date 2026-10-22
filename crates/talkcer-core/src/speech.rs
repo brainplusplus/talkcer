@@ -143,7 +143,10 @@ impl Tts for HttpTts {
             request = request.bearer_auth(credential);
         }
         let response = request.send().await.map_err(|error| {
-            CoreError::ProviderUnavailable(format!("tts request to {} failed: {error}", self.request_url()))
+            CoreError::ProviderUnavailable(format!(
+                "tts request to {} failed: {error}",
+                self.request_url()
+            ))
         })?;
         let status = response.status();
         if !status.is_success() {
@@ -162,12 +165,19 @@ impl Tts for HttpTts {
         let bytes = response
             .bytes()
             .await
-            .map_err(|error| CoreError::ProviderUnavailable(format!("tts response body failed: {error}")))?
+            .map_err(|error| {
+                CoreError::ProviderUnavailable(format!("tts response body failed: {error}"))
+            })?
             .to_vec();
         if bytes.is_empty() {
-            return Err(CoreError::ProviderUnavailable("tts endpoint returned no audio".to_owned()));
+            return Err(CoreError::ProviderUnavailable(
+                "tts endpoint returned no audio".to_owned(),
+            ));
         }
-        Ok(SpeechOutput { content_type, bytes })
+        Ok(SpeechOutput {
+            content_type,
+            bytes,
+        })
     }
 
     fn provider(&self) -> &'static str {
@@ -235,11 +245,71 @@ pub fn select_tts(
         }
     }
     if let Some(value) = configured.filter(|value| value.is_object()) {
-        let config: ProviderConfig = serde_json::from_value(value.clone())
-            .map_err(|error| CoreError::InvalidConfiguration(format!("tts config is invalid: {error}")))?;
+        let config: ProviderConfig = serde_json::from_value(value.clone()).map_err(|error| {
+            CoreError::InvalidConfiguration(format!("tts config is invalid: {error}"))
+        })?;
         return tts_from_config(&config);
     }
+    // The session page stores its pick as `provider:model` under `tts_model`.
+    if let Some(serde_json::Value::String(choice)) = session.configuration.get("tts_model") {
+        if !choice.trim().is_empty() {
+            return tts_for_model(choice, configurations);
+        }
+    }
     Ok(TtsSelection::embedded())
+}
+
+/// Turn a `provider:model` pick into a TTS selection.
+///
+/// The endpoint, credential, and consent come from the first saved
+/// configuration for that provider, so the picker does not duplicate them.
+///
+/// # Errors
+///
+/// Returns [`CoreError::InvalidConfiguration`] when the value is not
+/// `provider:model` or the provider has no saved configuration, and
+/// [`CoreError::UnknownProvider`] for an unknown provider.
+pub fn tts_for_model(
+    choice: &str,
+    configurations: &[AiConfiguration],
+) -> Result<TtsSelection, CoreError> {
+    let (provider, model) = choice.split_once(':').ok_or_else(|| {
+        CoreError::InvalidConfiguration(format!(
+            "tts model '{choice}' must be provider:model"
+        ))
+    })?;
+    let provider = provider.trim();
+    let model = model.trim();
+    if provider.is_empty() || model.is_empty() {
+        return Err(CoreError::InvalidConfiguration(format!(
+            "tts model '{choice}' must name a provider and a model"
+        )));
+    }
+    let kind = crate::ai::provider_kind(crate::ai::Capability::Tts, provider)
+        .ok_or_else(|| CoreError::UnknownProvider(provider.to_owned()))?;
+    if let Some(config) = configurations
+        .iter()
+        .map(|item| &item.tts)
+        .find(|item| item.provider.trim() == provider)
+    {
+        return tts_from_config(&ProviderConfig {
+            model: model.to_owned(),
+            ..config.clone()
+        });
+    }
+    if kind != ProviderKind::Embedded {
+        return Err(CoreError::InvalidConfiguration(format!(
+            "'{provider}' needs a saved configuration before it can speak"
+        )));
+    }
+    Ok(TtsSelection {
+        provider: provider.to_owned(),
+        kind,
+        model: model.to_owned(),
+        endpoint: None,
+        credentials_ref: None,
+        voice: "default".to_owned(),
+    })
 }
 
 /// Validate one stored TTS slot.
@@ -249,12 +319,19 @@ pub fn select_tts(
 /// Returns [`CoreError`] for an unknown provider or an incomplete remote slot.
 pub fn tts_from_config(config: &ProviderConfig) -> Result<TtsSelection, CoreError> {
     let provider = config.provider.trim();
-    let (known_kind, remote) = match provider {
-        "embedded-tts" | "disabled-tts" => (ProviderKind::Embedded, false),
-        "cloud-tts" => (ProviderKind::Cloud, true),
-        "self-hosted-tts" => (ProviderKind::SelfHosted, true),
-        other => return Err(CoreError::UnknownProvider(other.to_owned())),
+    // Both the legacy slot names and the catalog provider ids are accepted, so
+    // a voice picked as `tts-openai:alloy` validates like a saved slot does.
+    let known_kind = match provider {
+        "embedded-tts" | "disabled-tts" => ProviderKind::Embedded,
+        "cloud-tts" => ProviderKind::Cloud,
+        "self-hosted-tts" => ProviderKind::SelfHosted,
+        other => crate::ai::provider_kind(crate::ai::Capability::Tts, other)
+            .ok_or_else(|| CoreError::UnknownProvider(other.to_owned()))?,
     };
+    let remote = matches!(
+        known_kind,
+        ProviderKind::SelfHosted | ProviderKind::Cloud
+    );
     if config.kind != known_kind {
         return Err(CoreError::InvalidConfiguration(format!(
             "tts provider '{provider}' requires kind {}",
@@ -263,7 +340,9 @@ pub fn tts_from_config(config: &ProviderConfig) -> Result<TtsSelection, CoreErro
     }
     let model = config.model.trim();
     if model.is_empty() {
-        return Err(CoreError::InvalidConfiguration("tts model must not be empty".to_owned()));
+        return Err(CoreError::InvalidConfiguration(
+            "tts model must not be empty".to_owned(),
+        ));
     }
     let endpoint = config
         .endpoint
@@ -286,7 +365,12 @@ pub fn tts_from_config(config: &ProviderConfig) -> Result<TtsSelection, CoreErro
         }
     }
     if known_kind == ProviderKind::Cloud
-        && config.credentials_ref.as_deref().map(str::trim).unwrap_or("").is_empty()
+        && config
+            .credentials_ref
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
     {
         return Err(CoreError::InvalidConfiguration(
             "tts credentials_ref is required for cloud".to_owned(),
@@ -415,6 +499,7 @@ impl TtsResolver for ConfiguredTtsResolver {
 ///
 /// Returns [`CoreError::InvalidConfiguration`] when the object is not a config.
 pub fn provider_config_from_value(value: &serde_json::Value) -> Result<ProviderConfig, CoreError> {
-    serde_json::from_value(value.clone())
-        .map_err(|error| CoreError::InvalidConfiguration(format!("provider config is invalid: {error}")))
+    serde_json::from_value(value.clone()).map_err(|error| {
+        CoreError::InvalidConfiguration(format!("provider config is invalid: {error}"))
+    })
 }

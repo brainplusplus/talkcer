@@ -56,7 +56,9 @@ impl RemoteAccessService {
     ///
     /// Returns a database error when the row cannot be read.
     pub async fn status(&self) -> Result<RemoteStatus, CoreError> {
-        Ok(RemoteStatus { enabled: self.token_hash().await?.is_some() })
+        Ok(RemoteStatus {
+            enabled: self.token_hash().await?.is_some(),
+        })
     }
 
     /// Enable or disable remote access.
@@ -68,11 +70,17 @@ impl RemoteAccessService {
         let now = Utc::now().to_rfc3339();
         if !enabled {
             self.save(false, None, &now).await?;
-            return Ok(Pairing { enabled: false, token: None });
+            return Ok(Pairing {
+                enabled: false,
+                token: None,
+            });
         }
         let token = random_token()?;
         self.save(true, Some(hash_token(&token)), &now).await?;
-        Ok(Pairing { enabled: true, token: Some(token) })
+        Ok(Pairing {
+            enabled: true,
+            token: Some(token),
+        })
     }
 
     /// Check a bearer token from a second computer.
@@ -122,7 +130,8 @@ impl RemoteAccessService {
 
 fn random_token() -> Result<String, CoreError> {
     let mut bytes = [0_u8; 32];
-    getrandom(&mut bytes).map_err(|error| CoreError::Migration(format!("pairing token: {error}")))?;
+    getrandom(&mut bytes)
+        .map_err(|error| CoreError::Migration(format!("pairing token: {error}")))?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 

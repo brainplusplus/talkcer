@@ -103,11 +103,14 @@ pub struct CaptureTick {
 pub struct CaptureDevice {
     /// `microphone` or `system_audio`.
     pub channel: String,
+    /// Stable endpoint id, unique even when two devices share a name.
+    pub id: String,
     /// Endpoint friendly name reported by Windows.
     pub name: String,
     /// `capture` for the microphone or `render_loopback` for system audio.
     pub direction: String,
-    /// `active`, or `error` after a read failure.
+    /// `default` for the system default, `active` otherwise, `error` after a
+    /// read failure.
     pub state: String,
     /// Sample rate the client was initialized with.
     pub sample_rate: u32,
@@ -206,7 +209,8 @@ impl CaptureStream for TestStream {
     }
 
     fn stop(&self) {
-        self.stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.stopped
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -239,17 +243,91 @@ pub trait CaptureDeviceProvider: Send + Sync + 'static {
     fn start(&self) -> Result<Vec<LiveEndpoint>, CoreError>;
 }
 
-/// Provider that opens the real WASAPI endpoints.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct WasapiDeviceProvider;
+/// The capture and playback device a session records, shared by the routes
+/// that save the choice and the provider that opens the stream.
+///
+/// A blank id means the system default. The choice comes from the saved audio
+/// selection when one is attached, so it survives a restart.
+#[derive(Clone, Default)]
+pub struct AudioDeviceChoice {
+    inner: std::sync::Arc<std::sync::Mutex<SelectedDevices>>,
+    saved: Option<crate::audio_selection::AudioSelectionService>,
+}
 
-impl CaptureDeviceProvider for WasapiDeviceProvider {
+/// The two device ids, empty for the system default.
+#[derive(Debug, Clone, Default)]
+struct SelectedDevices {
+    microphone: String,
+    playback: String,
+}
+
+impl AudioDeviceChoice {
+    /// Follow a saved audio selection instead of memory.
+    #[must_use]
+    pub fn from_selection(selection: crate::audio_selection::AudioSelectionService) -> Self {
+        Self {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(SelectedDevices::default())),
+            saved: Some(selection),
+        }
+    }
+
+    /// Remember which devices to open next time capture starts.
+    pub fn set(&self, microphone: String, playback: String) {
+        if let Ok(mut guard) = self.inner.lock() {
+            *guard = SelectedDevices { microphone, playback };
+        }
+    }
+
+    /// The devices the next capture will open.
+    #[must_use]
+    pub fn get(&self) -> (String, String) {
+        if let Some(saved) = &self.saved {
+            let selection = saved.current();
+            return (selection.microphone, selection.playback);
+        }
+        self.inner
+            .lock()
+            .map(|guard| (guard.microphone.clone(), guard.playback.clone()))
+            .unwrap_or_default()
+    }
+}
+
+/// A WASAPI provider that opens the devices named in an [`AudioDeviceChoice`].
+///
+/// This is the only provider that touches real hardware. A default choice opens
+/// the system default endpoints, so there is one code path for both cases.
+#[derive(Clone, Default)]
+pub struct SelectedWasapiProvider {
+    choice: AudioDeviceChoice,
+}
+
+impl SelectedWasapiProvider {
+    /// Build a provider that follows one shared choice.
+    #[must_use]
+    pub fn new(choice: AudioDeviceChoice) -> Self {
+        Self { choice }
+    }
+
+    /// Build a provider that reads the saved audio selection.
+    ///
+    /// This is the production path: the choice survives a restart because it
+    /// lives in the database, not in memory.
+    #[must_use]
+    pub fn from_selection(selection: crate::audio_selection::AudioSelectionService) -> Self {
+        Self {
+            choice: AudioDeviceChoice::from_selection(selection),
+        }
+    }
+}
+
+impl CaptureDeviceProvider for SelectedWasapiProvider {
     fn open(&self) -> Result<Vec<CaptureDevice>, CoreError> {
         Ok(crate::capture_device::probe_default_devices()?.devices)
     }
 
     fn start(&self) -> Result<Vec<LiveEndpoint>, CoreError> {
-        crate::capture_device::start_live_capture()
+        let (microphone, playback) = self.choice.get();
+        crate::capture_device::start_selected(&microphone, &playback)
     }
 }
 
@@ -273,6 +351,7 @@ impl FixtureDeviceProvider {
             devices: vec![
                 CaptureDevice {
                     channel: "microphone".to_owned(),
+                    id: "Test Microphone".to_owned(),
                     name: "Test Microphone".to_owned(),
                     direction: "capture".to_owned(),
                     state: "active".to_owned(),
@@ -282,6 +361,7 @@ impl FixtureDeviceProvider {
                 },
                 CaptureDevice {
                     channel: "system_audio".to_owned(),
+                    id: "Test Speakers".to_owned(),
                     name: "Test Speakers".to_owned(),
                     direction: "render_loopback".to_owned(),
                     state: "active".to_owned(),
@@ -342,6 +422,7 @@ impl ScriptedDeviceProvider {
     pub fn spoken_pair(microphone_text: &str, system_text: &str) -> Self {
         let microphone = CaptureDevice {
             channel: "microphone".to_owned(),
+            id: "Scripted Microphone".to_owned(),
             name: "Scripted Microphone".to_owned(),
             direction: "capture".to_owned(),
             state: "active".to_owned(),
@@ -351,6 +432,7 @@ impl ScriptedDeviceProvider {
         };
         let system_audio = CaptureDevice {
             channel: "system_audio".to_owned(),
+            id: "Scripted Speakers".to_owned(),
             name: "Scripted Speakers".to_owned(),
             direction: "render_loopback".to_owned(),
             state: "active".to_owned(),
@@ -367,7 +449,10 @@ impl ScriptedDeviceProvider {
     /// The stream handle for a channel, so a test can push PCM or fail it.
     #[must_use]
     pub fn stream(&self, channel: &str) -> Option<std::sync::Arc<TestStream>> {
-        let index = self.devices.iter().position(|device| device.channel == channel)?;
+        let index = self
+            .devices
+            .iter()
+            .position(|device| device.channel == channel)?;
         self.streams.lock().ok()?.get(index).cloned()
     }
 }
@@ -379,14 +464,21 @@ impl CaptureDeviceProvider for ScriptedDeviceProvider {
 
     fn start(&self) -> Result<Vec<LiveEndpoint>, CoreError> {
         let Ok(streams) = self.streams.lock() else {
-            return Err(CoreError::InvalidCapture("scripted streams are unavailable".to_owned()));
+            return Err(CoreError::InvalidCapture(
+                "scripted streams are unavailable".to_owned(),
+            ));
         };
         Ok(self
             .devices
             .iter()
             .cloned()
             .zip(streams.iter().cloned())
-            .map(|(device, stream)| (device, Box::new(SharedTestStream(stream)) as Box<dyn CaptureStream>))
+            .map(|(device, stream)| {
+                (
+                    device,
+                    Box::new(SharedTestStream(stream)) as Box<dyn CaptureStream>,
+                )
+            })
             .collect())
     }
 }
@@ -448,7 +540,8 @@ pub struct CaptureFixture {
 }
 
 /// Live reader threads keyed by session.
-type StreamRegistry = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, Vec<LiveEndpoint>>>>;
+type StreamRegistry =
+    std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, Vec<LiveEndpoint>>>>;
 
 /// Windows-only capture controller.
 ///
@@ -470,9 +563,23 @@ where
     T: TimelineRepository,
 {
     /// Build a controller that opens the real WASAPI devices.
+    ///
+    /// With no saved audio selection this opens the system default microphone
+    /// and the default playback endpoint, exactly like
+    /// [`crate::capture_device::start_live_capture`]. Production builds pass a
+    /// provider built from the saved selection instead.
     #[must_use]
-    pub fn new(sessions: SessionService<S>, timeline: TimelineService<T>, pool: SqlitePool) -> Self {
-        Self::with_provider(sessions, timeline, pool, std::sync::Arc::new(WasapiDeviceProvider))
+    pub fn new(
+        sessions: SessionService<S>,
+        timeline: TimelineService<T>,
+        pool: SqlitePool,
+    ) -> Self {
+        Self::with_provider(
+            sessions,
+            timeline,
+            pool,
+            std::sync::Arc::new(SelectedWasapiProvider::default()),
+        )
     }
 
     /// Build a controller over a custom device provider.
@@ -525,7 +632,11 @@ where
     /// Returns [`CoreError::InvalidCapture`] for a non-live session or an illegal
     /// transition, and [`CoreError::AudioDevice`] when a native endpoint cannot
     /// be opened.
-    pub async fn control(&self, session_id: Uuid, action: CaptureAction) -> Result<CaptureStatus, CoreError> {
+    pub async fn control(
+        &self,
+        session_id: Uuid,
+        action: CaptureAction,
+    ) -> Result<CaptureStatus, CoreError> {
         self.require_live(session_id).await?;
         let current = self.status(session_id).await?;
         let mut devices = Vec::new();
@@ -548,7 +659,10 @@ where
             }
             (CaptureState::Capturing | CaptureState::Paused, CaptureAction::Disconnect) => {
                 self.stop_streams(session_id);
-                (CaptureState::Error, Some("audio device disconnected".to_owned()))
+                (
+                    CaptureState::Error,
+                    Some("audio device disconnected".to_owned()),
+                )
             }
             (CaptureState::Error, CaptureAction::Recover) => (CaptureState::Idle, None),
             (state, _) => {
@@ -559,7 +673,13 @@ where
             }
         };
         self.store(session_id, state, error.clone()).await?;
-        Ok(CaptureStatus { session_id, platform: "windows", state, error, devices })
+        Ok(CaptureStatus {
+            session_id,
+            platform: "windows",
+            state,
+            error,
+            devices,
+        })
     }
 
     /// Advance the pipeline once: transcribe buffered audio and detect a drop.
@@ -577,7 +697,11 @@ where
     /// Returns a database error when the state row cannot be read or written.
     pub async fn poll(&self, session_id: Uuid) -> Result<CaptureTick, CoreError> {
         if self.status(session_id).await?.state != CaptureState::Capturing {
-            return Ok(CaptureTick { session_id, transcripts: Vec::new(), disconnected: None });
+            return Ok(CaptureTick {
+                session_id,
+                transcripts: Vec::new(),
+                disconnected: None,
+            });
         }
         let transcripts = self.ingest(session_id).await;
         let failed = self
@@ -588,12 +712,17 @@ where
             Some(device) => {
                 self.stop_streams(session_id);
                 let message = format!("audio device disconnected: {}", device.channel);
-                self.store(session_id, CaptureState::Error, Some(message.clone())).await?;
+                self.store(session_id, CaptureState::Error, Some(message.clone()))
+                    .await?;
                 Some(message)
             }
             None => None,
         };
-        Ok(CaptureTick { session_id, transcripts, disconnected })
+        Ok(CaptureTick {
+            session_id,
+            transcripts,
+            disconnected,
+        })
     }
 
     /// Segment every live channel and store the transcripts it can produce.
@@ -613,21 +742,30 @@ where
                 .unwrap_or_default(),
             Err(_) => Vec::new(),
         };
-        // Resolve the session's STT provider once per drain. A session with no
-        // STT configuration gets the embedded offline adapter.
-        let transcriber = match self.sessions.get(session_id).await {
-            Ok(session) => self.resolver.resolve(&session).await.unwrap_or_else(|error| {
-                eprintln!("talkcer: stt selection failed for {session_id}: {error}");
-                std::sync::Arc::new(crate::audio::EmbeddedTranscriber)
-            }),
-            Err(error) => {
-                eprintln!("talkcer: session {session_id} unavailable for stt: {error}");
-                std::sync::Arc::new(crate::audio::EmbeddedTranscriber)
-            }
-        };
+        // Resolve the session once, then build a transcriber per channel: the
+        // Audio page can give the microphone and system audio different models.
+        let session = self.sessions.get(session_id).await.ok();
         let mut saved = Vec::new();
         for (device, pcm) in drained {
-            let segmenter = crate::audio::Segmenter::for_speech(device.sample_rate, device.channels);
+            let transcriber = match &session {
+                Some(session) => self
+                    .resolver
+                    .resolve_channel(session, &device.channel)
+                    .await
+                    .unwrap_or_else(|error| {
+                        eprintln!(
+                            "talkcer: stt selection failed for {session_id} on {}: {error}",
+                            device.channel
+                        );
+                        std::sync::Arc::new(crate::audio::EmbeddedTranscriber)
+                    }),
+                None => {
+                    eprintln!("talkcer: session {session_id} unavailable for stt");
+                    std::sync::Arc::new(crate::audio::EmbeddedTranscriber)
+                }
+            };
+            let segmenter =
+                crate::audio::Segmenter::for_speech(device.sample_rate, device.channels);
             let started_at_ms = Utc::now().timestamp_millis();
             let (speaker, source) = match device.channel.as_str() {
                 "system_audio" => (Speaker::Remote, Source::SystemAudio),
@@ -754,7 +892,9 @@ where
         let provider = std::sync::Arc::clone(&self.provider);
         let opened = tokio::task::spawn_blocking(move || provider.start())
             .await
-            .map_err(|error| CoreError::InvalidCapture(format!("capture task failed: {error}")))??;
+            .map_err(|error| {
+                CoreError::InvalidCapture(format!("capture task failed: {error}"))
+            })??;
         let devices = opened.iter().map(|(device, _)| device.clone()).collect();
         if let Ok(mut guard) = self.streams.lock() {
             guard.insert(session_id, opened);
@@ -795,7 +935,11 @@ where
         let (speaker, source) = match fixture.channel.as_str() {
             "microphone" => (Speaker::LocalUser, Source::Microphone),
             "system_audio" => (Speaker::Remote, Source::SystemAudio),
-            other => return Err(CoreError::InvalidCapture(format!("unknown channel {other}"))),
+            other => {
+                return Err(CoreError::InvalidCapture(format!(
+                    "unknown channel {other}"
+                )))
+            }
         };
         self.timeline
             .upsert_transcript(
@@ -806,9 +950,13 @@ where
                     source,
                     text: fixture.text.trim().to_owned(),
                     started_at_ms: fixture.started_at_ms,
-                    ended_at_ms: fixture.is_final.then_some(fixture.started_at_ms.saturating_add(1)),
+                    ended_at_ms: fixture
+                        .is_final
+                        .then_some(fixture.started_at_ms.saturating_add(1)),
                     is_final: fixture.is_final,
-                    metadata: Some(json!({ "audio_channel": fixture.channel, "platform": "windows" })),
+                    metadata: Some(
+                        json!({ "audio_channel": fixture.channel, "platform": "windows" }),
+                    ),
                 },
             )
             .await
@@ -819,11 +967,18 @@ where
         if session.mode == SessionMode::LiveInterview {
             Ok(())
         } else {
-            Err(CoreError::InvalidCapture("capture requires a live_interview session".to_owned()))
+            Err(CoreError::InvalidCapture(
+                "capture requires a live_interview session".to_owned(),
+            ))
         }
     }
 
-    async fn store(&self, session_id: Uuid, state: CaptureState, error: Option<String>) -> Result<(), CoreError> {
+    async fn store(
+        &self,
+        session_id: Uuid,
+        state: CaptureState,
+        error: Option<String>,
+    ) -> Result<(), CoreError> {
         sqlx::query(
             "INSERT INTO capture_sessions (session_id, platform, state, error, updated_at)
              VALUES (?, 'windows', ?, ?, ?)

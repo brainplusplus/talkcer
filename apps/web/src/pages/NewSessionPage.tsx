@@ -39,9 +39,15 @@ export function NewSessionPage({ mode, label }: { mode: SessionMode; label: stri
   }
 
   return (
-    <section>
-      <h2>New {label}</h2>
-      <form onSubmit={onSubmit}>
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>New {label}</h2>
+          <p className="lede">A title is enough. Role and company stay with this session.</p>
+        </div>
+        <Link to={`/${SLUG[mode]}`}>Back</Link>
+      </header>
+      <form onSubmit={onSubmit} className="sheet pad">
         <label>
           Title
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
@@ -59,13 +65,10 @@ export function NewSessionPage({ mode, label }: { mode: SessionMode; label: stri
           <input value={language} onChange={(event) => setLanguage(event.target.value)} />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={mutation.isPending}>
+        <button type="submit" className="primary" disabled={mutation.isPending}>
           {mutation.isPending ? "Creating…" : "Create session"}
         </button>
       </form>
-      <p>
-        <Link to={`/${SLUG[mode]}`}>Back</Link>
-      </p>
     </section>
   );
 }

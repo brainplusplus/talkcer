@@ -122,11 +122,20 @@ fn session_matches(session_id: Option<Uuid>, payload: &str) -> bool {
     };
     serde_json::from_str::<Value>(payload)
         .ok()
-        .and_then(|value| value.get("session_id").and_then(Value::as_str).map(ToOwned::to_owned))
+        .and_then(|value| {
+            value
+                .get("session_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
         .is_some_and(|value| value == session_id.to_string())
 }
 
-async fn handle_text(state: &AppState, session_id: &mut Option<Uuid>, text: &str) -> Option<String> {
+async fn handle_text(
+    state: &AppState,
+    session_id: &mut Option<Uuid>,
+    text: &str,
+) -> Option<String> {
     let value: Value = match serde_json::from_str(text) {
         Ok(value) => value,
         Err(error) => {
@@ -146,14 +155,22 @@ async fn handle_text(state: &AppState, session_id: &mut Option<Uuid>, text: &str
     })
 }
 
-async fn subscribe(state: &AppState, session_id: &mut Option<Uuid>, value: &Value) -> Result<(), CoreError> {
+async fn subscribe(
+    state: &AppState,
+    session_id: &mut Option<Uuid>,
+    value: &Value,
+) -> Result<(), CoreError> {
     let id = required_session(value)?;
     state.sessions.get(id).await?;
     *session_id = Some(id);
     Ok(())
 }
 
-async fn send_message(state: &AppState, session_id: &mut Option<Uuid>, value: &Value) -> Result<(), CoreError> {
+async fn send_message(
+    state: &AppState,
+    session_id: &mut Option<Uuid>,
+    value: &Value,
+) -> Result<(), CoreError> {
     let id = required_session(value)?;
     *session_id = Some(id);
     let text = value
@@ -165,7 +182,11 @@ async fn send_message(state: &AppState, session_id: &mut Option<Uuid>, value: &V
     Ok(())
 }
 
-async fn assistant(state: &AppState, session_id: &mut Option<Uuid>, value: &Value) -> Result<(), CoreError> {
+async fn assistant(
+    state: &AppState,
+    session_id: &mut Option<Uuid>,
+    value: &Value,
+) -> Result<(), CoreError> {
     let id = required_session(value)?;
     *session_id = Some(id);
     let action = AssistantAction::parse(value.get("action").and_then(Value::as_str).unwrap_or(""))?;

@@ -77,7 +77,10 @@ impl Subscription {
     /// `overlay.state_changed`, which always forces a preference reload.
     #[must_use]
     pub fn classify(&self, event: &serde_json::Value) -> EventOutcome {
-        let kind = event.get("type").and_then(serde_json::Value::as_str).unwrap_or("");
+        let kind = event
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
         if kind == "overlay.state_changed" || kind == "overlay.update_preferences" {
             return EventOutcome::RefreshPreferences;
         }
@@ -91,7 +94,9 @@ impl Subscription {
             return EventOutcome::Ignore;
         }
         match kind {
-            "transcript.updated" | "assistant.delta" | "assistant.completed" => EventOutcome::RefreshView,
+            "transcript.updated" | "assistant.delta" | "assistant.completed" => {
+                EventOutcome::RefreshView
+            }
             _ => EventOutcome::Ignore,
         }
     }

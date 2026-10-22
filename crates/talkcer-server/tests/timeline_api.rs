@@ -1,4 +1,4 @@
-﻿//! HTTP and WebSocket acceptance tests for Task 3.
+//! HTTP and WebSocket acceptance tests for Task 3.
 
 use std::time::Duration;
 
@@ -20,7 +20,12 @@ fn db_path(name: &str) -> std::path::PathBuf {
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+async fn http(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let response = app
         .clone()
         .oneshot(
@@ -28,7 +33,9 @@ async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
                 .method(method)
                 .uri(uri)
                 .header("content-type", "application/json")
-                .body(Body::from(body.map(|value| value.to_string()).unwrap_or_default()))
+                .body(Body::from(
+                    body.map(|value| value.to_string()).unwrap_or_default(),
+                ))
                 .unwrap(),
         )
         .await
@@ -238,7 +245,10 @@ async fn partials_final_websocket_and_assistant_stub() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(persisted["items"][0]["text"], "How would you handle retries?");
+    assert_eq!(
+        persisted["items"][0]["text"],
+        "How would you handle retries?"
+    );
 
     server.abort();
     let _ = std::fs::remove_file(path);

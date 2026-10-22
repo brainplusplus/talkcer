@@ -4,8 +4,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use talkcer_core::{
-    connect_and_migrate, cv_prompt, parse_cv_fields, read_cv, CareerEntry, CvSource, EducationEntry,
-    ProfileService, SaveProfile,
+    connect_and_migrate, cv_prompt, parse_cv_fields, read_cv, CareerEntry, CvSource,
+    EducationEntry, ProfileService, SaveProfile,
 };
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
@@ -59,7 +59,10 @@ async fn profile_round_trips_and_drops_empty_entries() {
     let context = again.context_text();
     assert!(context.contains("Name: Ada"));
     assert!(context.contains("Work: Engineer, Acme, 2020-2024"));
-    assert!(!context.contains("Bandung"), "birth place stays out of the model context");
+    assert!(
+        !context.contains("Bandung"),
+        "birth place stays out of the model context"
+    );
 
     let _ = std::fs::remove_file(file);
 }
@@ -80,7 +83,8 @@ fn docx_text_is_read_and_the_file_is_not_stored() {
     let mut buffer = std::io::Cursor::new(Vec::new());
     {
         let mut zip = zip::ZipWriter::new(&mut buffer);
-        zip.start_file("word/document.xml", SimpleFileOptions::default()).unwrap();
+        zip.start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
         write!(
             zip,
             r#"<w:document><w:p><w:r><w:t>Ada Lovelace</w:t></w:r></w:p><w:p><w:r><w:t>Built engines.</w:t></w:r></w:p></w:document>"#
@@ -111,7 +115,10 @@ fn model_reply_fills_fields_and_never_guesses_birth() {
     ```"#;
     let fields = parse_cv_fields(raw);
     assert_eq!(fields.name, "Ada");
-    assert!(fields.birth_date.is_empty(), "birth date is dropped even if the model invented one");
+    assert!(
+        fields.birth_date.is_empty(),
+        "birth date is dropped even if the model invented one"
+    );
     assert_eq!(fields.career[0].company, "Acme");
     assert_eq!(fields.skills, vec!["Rust".to_owned()]);
     assert!(cv_prompt("text").contains("Never guess a birth date"));

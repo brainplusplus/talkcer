@@ -19,7 +19,10 @@ fn db_path(name: &str) -> PathBuf {
 async fn service(name: &str) -> (SessionService<SqliteSessionRepository>, PathBuf) {
     let path = db_path(name);
     let pool = connect_and_migrate(&path).await.unwrap();
-    (SessionService::new(SqliteSessionRepository::new(pool)), path)
+    (
+        SessionService::new(SqliteSessionRepository::new(pool)),
+        path,
+    )
 }
 
 fn live(title: &str) -> CreateSession {
@@ -44,7 +47,10 @@ async fn invalid_mode_is_rejected() {
 async fn create_list_get_update_delete_round_trip() {
     let (service, path) = service("crud").await;
 
-    let created = service.create(live("Backend Engineer — Acme")).await.unwrap();
+    let created = service
+        .create(live("Backend Engineer — Acme"))
+        .await
+        .unwrap();
     assert_eq!(created.status, SessionStatus::Ready);
     assert_eq!(created.context["company"], "Acme");
 

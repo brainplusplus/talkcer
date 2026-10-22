@@ -7,11 +7,11 @@
 use std::sync::Arc;
 
 use talkcer_core::{
-    connect_and_migrate, stub_assistant_text, AssistantAction, AssistantActionRequest, CreateSession,
-    ItemKind, LearningAction, LearningService, LearningTurn, MockAction, MockInterviewService,
-    MockTurn, ProviderKind, SessionMode, SessionService, SessionStatus, SqliteSessionRepository,
-    SqliteTimelineRepository, Thinker, ThinkerReply, ThinkerResolver, ThinkerTask, TimelineQuery,
-    TimelineService, UpsertTranscript,
+    connect_and_migrate, stub_assistant_text, AssistantAction, AssistantActionRequest,
+    CreateSession, ItemKind, LearningAction, LearningService, LearningTurn, MockAction,
+    MockInterviewService, MockTurn, ProviderKind, SessionMode, SessionService, SessionStatus,
+    SqliteSessionRepository, SqliteTimelineRepository, Thinker, ThinkerReply, ThinkerResolver,
+    ThinkerTask, TimelineQuery, TimelineService, UpsertTranscript,
 };
 use uuid::Uuid;
 
@@ -32,9 +32,7 @@ impl Thinker for CannedThinker {
     }
 }
 
-fn canned_timeline(
-    pool: sqlx::SqlitePool,
-) -> TimelineService<SqliteTimelineRepository> {
+fn canned_timeline(pool: sqlx::SqlitePool) -> TimelineService<SqliteTimelineRepository> {
     let resolver: Arc<dyn ThinkerResolver> = Arc::new(talkcer_core::FixedThinkerResolver::new(
         Arc::new(CannedThinker),
     ));
@@ -158,10 +156,15 @@ async fn mock_interview_takes_every_reply_from_the_session_thinker() {
         .await
         .unwrap();
 
-    let controller =
-        MockInterviewService::new(sessions.clone(), canned_timeline(pool));
+    let controller = MockInterviewService::new(sessions.clone(), canned_timeline(pool));
     let started = controller
-        .turn(session.id, MockTurn { action: MockAction::Start, text: None })
+        .turn(
+            session.id,
+            MockTurn {
+                action: MockAction::Start,
+                text: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(started.status, SessionStatus::Active);
@@ -212,7 +215,13 @@ async fn learning_turns_take_every_reply_from_the_session_thinker() {
 
     let controller = LearningService::new(sessions.clone(), canned_timeline(pool));
     let started = controller
-        .turn(session.id, LearningTurn { action: LearningAction::Start, text: None })
+        .turn(
+            session.id,
+            LearningTurn {
+                action: LearningAction::Start,
+                text: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(started.items[0].text, "canned:learning_intro");
@@ -244,7 +253,9 @@ async fn learning_turns_take_every_reply_from_the_session_thinker() {
     assert_eq!(answered.items[1].text, "canned:learning_feedback");
 
     let page = controller_timeline_items(&file, session.id).await;
-    assert!(page.iter().any(|item| item.text == "canned:learning_feedback"));
+    assert!(page
+        .iter()
+        .any(|item| item.text == "canned:learning_feedback"));
     let _ = std::fs::remove_file(file);
 }
 
@@ -255,7 +266,13 @@ async fn controller_timeline_items(
     let pool = connect_and_migrate(file).await.unwrap();
     let timeline = TimelineService::new(SqliteTimelineRepository::new(pool));
     timeline
-        .list(session_id, TimelineQuery { limit: 50, before: None })
+        .list(
+            session_id,
+            TimelineQuery {
+                limit: 50,
+                before: None,
+            },
+        )
         .await
         .unwrap()
         .items

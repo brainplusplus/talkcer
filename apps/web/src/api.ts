@@ -231,10 +231,20 @@ export function getTimeline(sessionId: string): Promise<{ items: TimelineItem[] 
   return request(timelinePath(sessionId));
 }
 
-export function postMessage(sessionId: string, text: string): Promise<TimelineItem> {
+export function postMessage(
+  sessionId: string,
+  text: string,
+  options?: { model?: string; profile_context?: boolean },
+): Promise<{ message: TimelineItem; reply: TimelineItem | null }> {
   return request(`/api/sessions/${sessionId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ kind: "user_message", text, metadata: {} }),
+    body: JSON.stringify({
+      kind: "user_message",
+      text,
+      metadata: {},
+      ...(options?.model ? { model: options.model } : {}),
+      ...(options?.profile_context !== undefined ? { profile_context: options.profile_context } : {}),
+    }),
   });
 }
 
@@ -278,6 +288,89 @@ export function getAiConfigurations(): Promise<AiConfiguration[]> {
 
 export function getProviders(): Promise<ProviderDescriptor[]> {
   return request("/api/config/ai/providers");
+}
+
+export type ModelOption = {
+  id: string;
+  label: string;
+  size_mb: number | null;
+  speed?: string;
+  accuracy?: string;
+  english_only: boolean;
+  local: boolean;
+};
+
+export type ModelCatalog = {
+  capability: Capability;
+  provider: string;
+  default_model: string;
+  models: ModelOption[];
+};
+
+export function modelCatalogs(): Promise<ModelCatalog[]> {
+  return request("/api/config/ai/models");
+}
+
+export type DownloadState = "ready" | "partial" | "missing";
+
+export type DownloadStatus = {
+  capability: Capability;
+  provider: string;
+  model: string;
+  size_mb: number;
+  state: DownloadState;
+};
+
+export function modelDownloads(): Promise<DownloadStatus[]> {
+  return request("/api/config/ai/downloads");
+}
+
+export function startModelDownload(input: {
+  capability: Capability;
+  provider: string;
+  model: string;
+}): Promise<DownloadStatus> {
+  return request("/api/config/ai/downloads", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type ProbeResult = {
+  capability: Capability;
+  provider: string;
+  ok: boolean;
+  message: string;
+};
+
+export function probeProvider(input: {
+  capability: Capability;
+  provider: string;
+  model?: string;
+  endpoint?: string;
+  credentials_ref?: string;
+}): Promise<ProbeResult> {
+  return request("/api/config/ai/probe", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type ProviderSelection = {
+  capability: Capability;
+  offered: { provider: string; model: string }[];
+  disabled: string[];
+  defaults: Record<string, string>;
+};
+
+export function getSelection(): Promise<ProviderSelection[]> {
+  return request("/api/config/ai/selection");
+}
+
+export function saveSelection(selection: ProviderSelection): Promise<ProviderSelection> {
+  return request("/api/config/ai/selection", { method: "PUT", body: JSON.stringify(selection) });
+}
+
+export function discoverModels(endpoint: string, key?: string): Promise<ModelOption[]> {
+  const params = new URLSearchParams({ endpoint });
+  if (key) {
+    params.set("key", key);
+  }
+  return request(`/api/config/ai/discover?${params.toString()}`);
 }
 
 export function saveAiConfiguration(input: {
@@ -326,6 +419,7 @@ export function sendVoiceAudio(
 
 export type CaptureDevice = {
   channel: string;
+  id: string;
   name: string;
   direction: string;
   state: string;
@@ -359,6 +453,32 @@ export function audioDevicesPath(): string {
 
 export function audioDevices(): Promise<{ devices: CaptureDevice[] }> {
   return request(audioDevicesPath());
+}
+
+export type AudioEndpoint = {
+  id: string;
+  name: string;
+  direction: string;
+  state: string;
+};
+
+export function audioEndpoints(): Promise<{ devices: AudioEndpoint[] }> {
+  return request("/api/audio/devices");
+}
+
+export type AudioSelection = {
+  microphone: string;
+  playback: string;
+  microphone_model: string;
+  system_model: string;
+};
+
+export function audioSelection(): Promise<AudioSelection> {
+  return request("/api/audio/selection");
+}
+
+export function saveAudioSelection(selection: AudioSelection): Promise<AudioSelection> {
+  return request("/api/audio/selection", { method: "PUT", body: JSON.stringify(selection) });
 }
 
 export function captureDevices(sessionId: string): Promise<{ devices: CaptureDevice[] }> {

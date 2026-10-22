@@ -81,7 +81,10 @@ pub fn router(state: AppState, web_dir: Option<PathBuf>) -> Router {
 
     let auth_state = state.clone();
     router
-        .layer(middleware::from_fn_with_state(auth_state, remote::authorize))
+        .layer(middleware::from_fn_with_state(
+            auth_state,
+            remote::authorize,
+        ))
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

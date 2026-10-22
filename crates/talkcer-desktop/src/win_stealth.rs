@@ -126,7 +126,10 @@ pub fn set_taskbar_visible(visible: bool) -> u32 {
     };
     // SAFETY: `sweep` outlives the synchronous EnumWindows call.
     unsafe {
-        let _ = EnumWindows(Some(taskbar_visit), LPARAM(&mut sweep as *mut TaskbarSweep as isize));
+        let _ = EnumWindows(
+            Some(taskbar_visit),
+            LPARAM(&mut sweep as *mut TaskbarSweep as isize),
+        );
     }
     sweep.changed
 }

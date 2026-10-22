@@ -8,14 +8,19 @@ use std::sync::Arc;
 
 use base64::Engine;
 use talkcer_core::{
-    build_tts, select_tts, AiConfiguration, CreateSession, EmbeddedTts, FixedTtsResolver,
-    HttpTts, ProviderConfig, ProviderKind, SaveAiConfiguration, Session, SessionMode, SessionService,
+    build_tts, select_tts, AiConfiguration, CreateSession, EmbeddedTts, FixedTtsResolver, HttpTts,
+    ProviderConfig, ProviderKind, SaveAiConfiguration, Session, SessionMode, SessionService,
     SpeakRequest, SqliteSessionRepository, SqliteTimelineRepository, TimelineService, Tts,
     TtsResolver, TtsSelection, UpdateSession, VoiceService,
 };
 use uuid::Uuid;
 
-fn config(kind: ProviderKind, provider: &str, endpoint: Option<&str>, consent: bool) -> ProviderConfig {
+fn config(
+    kind: ProviderKind,
+    provider: &str,
+    endpoint: Option<&str>,
+    consent: bool,
+) -> ProviderConfig {
     ProviderConfig {
         kind,
         provider: provider.to_owned(),
@@ -49,6 +54,85 @@ fn session_without_configuration_uses_the_embedded_provider() {
 }
 
 #[test]
+fn the_session_page_voice_is_read_from_tts_model() {
+    // The session page writes `provider:model` under `tts_model`, which the
+    // resolver ignored while it read `tts_provider` only. Piper is a local
+    // voice, but it is served over an endpoint, so without a saved
+    // configuration the selection must fail as "needs a configuration" rather
+    // than as an unknown provider.
+    let session = Session {
+        configuration: serde_json::json!({ "tts_model": "piper:en_US-lessac-medium" }),
+        ..session_with_tts(serde_json::Value::Null)
+    };
+    let error = select_tts(&session, &[]).unwrap_err().to_string();
+    assert!(error.contains("needs a saved configuration"), "{error}");
+    assert!(!error.contains("unknown"), "{error}");
+}
+
+#[test]
+fn a_local_tts_model_with_a_saved_configuration_is_selected() {
+    let mut saved = config(
+        ProviderKind::SelfHosted,
+        "piper",
+        Some("http://127.0.0.1:9100/v1"),
+        true,
+    );
+    saved.model = "en_US-lessac-medium".to_owned();
+    let saved = AiConfiguration {
+        id: Uuid::now_v7(),
+        name: "local piper".to_owned(),
+        stt: config(ProviderKind::Embedded, "embedded-stt", None, false),
+        thinker: config(ProviderKind::Embedded, "embedded-thinker", None, false),
+        tts: saved,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    let session = Session {
+        configuration: serde_json::json!({ "tts_model": "piper:en_US-lessac-medium" }),
+        ..session_with_tts(serde_json::Value::Null)
+    };
+    let selection = select_tts(&session, std::slice::from_ref(&saved)).unwrap();
+    assert_eq!(selection.provider, "piper");
+    assert_eq!(selection.model, "en_US-lessac-medium");
+    assert_eq!(
+        selection.endpoint.as_deref(),
+        Some("http://127.0.0.1:9100/v1")
+    );
+}
+
+#[test]
+fn a_tts_model_choice_uses_the_saved_configuration_for_its_provider() {
+    let mut saved = config(
+        ProviderKind::Cloud,
+        "tts-openai",
+        Some("https://api.openai.test/v1"),
+        true,
+    );
+    saved.credentials_ref = Some("openai-prod".to_owned());
+    let saved = AiConfiguration {
+        id: Uuid::now_v7(),
+        name: "openai voice".to_owned(),
+        stt: config(ProviderKind::Embedded, "embedded-stt", None, false),
+        thinker: config(ProviderKind::Embedded, "embedded-thinker", None, false),
+        tts: saved,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    let session = Session {
+        configuration: serde_json::json!({ "tts_model": "tts-openai:gpt-4o-mini-tts" }),
+        ..session_with_tts(serde_json::Value::Null)
+    };
+    let selection = select_tts(&session, std::slice::from_ref(&saved)).unwrap();
+    assert_eq!(selection.provider, "tts-openai");
+    assert_eq!(selection.model, "gpt-4o-mini-tts");
+    assert_eq!(
+        selection.endpoint.as_deref(),
+        Some("https://api.openai.test/v1")
+    );
+    assert!(selection.is_remote());
+}
+
+#[test]
 fn session_can_select_a_saved_configuration_by_id() {
     let mut tts = config(
         ProviderKind::SelfHosted,
@@ -70,7 +154,10 @@ fn session_can_select_a_saved_configuration_by_id() {
     let selection = select_tts(&session, std::slice::from_ref(&saved)).unwrap();
     assert_eq!(selection.provider, "self-hosted-tts");
     assert_eq!(selection.model, "piper");
-    assert_eq!(selection.endpoint.as_deref(), Some("http://127.0.0.1:9000/v1"));
+    assert_eq!(
+        selection.endpoint.as_deref(),
+        Some("http://127.0.0.1:9000/v1")
+    );
     assert!(selection.is_remote());
 }
 
@@ -215,7 +302,10 @@ async fn http_adapter_posts_a_speech_body_and_reads_the_audio() {
 
     let request = server.await.unwrap();
     assert!(request.starts_with("POST /v1/audio/speech "), "{request}");
-    assert!(request.to_ascii_lowercase().contains("application/json"), "{request}");
+    assert!(
+        request.to_ascii_lowercase().contains("application/json"),
+        "{request}"
+    );
     assert!(request.contains("tts-1"), "{request}");
     assert!(request.contains("alloy"), "{request}");
     assert!(request.contains("Feedback"), "{request}");
@@ -253,7 +343,10 @@ async fn fixed_resolver_supplies_the_service_adapter() {
 
     // The resolver trait is object safe, which the service relies on.
     let boxed: Arc<dyn TtsResolver> = Arc::new(FixedTtsResolver::new(Arc::new(EmbeddedTts)));
-    assert_eq!(boxed.resolve(&session).await.unwrap().provider(), "embedded-tts");
+    assert_eq!(
+        boxed.resolve(&session).await.unwrap().provider(),
+        "embedded-tts"
+    );
 }
 
 #[tokio::test]
@@ -280,7 +373,12 @@ async fn voice_speak_uses_the_session_tts_adapter() {
         Arc::new(FixedTtsResolver::new(Arc::new(EmbeddedTts))),
     );
     let spoken = voice
-        .speak(session.id, SpeakRequest { text: "Feedback".to_owned() })
+        .speak(
+            session.id,
+            SpeakRequest {
+                text: "Feedback".to_owned(),
+            },
+        )
         .await
         .unwrap();
     assert!(spoken.enabled);
@@ -302,7 +400,12 @@ async fn voice_speak_uses_the_session_tts_adapter() {
         .await
         .unwrap();
     let silent = voice
-        .speak(session.id, SpeakRequest { text: "Feedback".to_owned() })
+        .speak(
+            session.id,
+            SpeakRequest {
+                text: "Feedback".to_owned(),
+            },
+        )
         .await
         .unwrap();
     assert!(!silent.enabled);
@@ -334,12 +437,18 @@ async fn saved_configuration_round_trips_through_the_service() {
         })
         .await
         .unwrap();
-    let result = service.test(saved.id, talkcer_core::Capability::Tts).await.unwrap();
+    let result = service
+        .test(saved.id, talkcer_core::Capability::Tts)
+        .await
+        .unwrap();
     assert!(result.ok, "{}", result.message);
 
     let listed = service.list().await.unwrap();
-    let selection =
-        select_tts(&session_with_tts(serde_json::json!(saved.id.to_string())), &listed).unwrap();
+    let selection = select_tts(
+        &session_with_tts(serde_json::json!(saved.id.to_string())),
+        &listed,
+    )
+    .unwrap();
     assert_eq!(selection.provider, "self-hosted-tts");
     let _ = std::fs::remove_file(file);
 }

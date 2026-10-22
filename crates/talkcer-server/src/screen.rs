@@ -50,7 +50,11 @@ async fn capture(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let session = state.sessions.get(id).await?;
     let frame = windows_capturer()?.capture().await?;
-    let intent = if body.direct { ScreenIntent::Direct } else { ScreenIntent::Stage };
+    let intent = if body.direct {
+        ScreenIntent::Direct
+    } else {
+        ScreenIntent::Stage
+    };
     let (reading, reply) = match intent {
         ScreenIntent::Direct => {
             let reading = vision()?.read(&frame).await?;
@@ -60,7 +64,15 @@ async fn capture(
         }
         ScreenIntent::Stage => (None, None),
     };
-    let outcome = record_screen(&state.timeline, id, intent, &frame, reading.as_deref(), reply.as_deref()).await?;
+    let outcome = record_screen(
+        &state.timeline,
+        id,
+        intent,
+        &frame,
+        reading.as_deref(),
+        reply.as_deref(),
+    )
+    .await?;
     if let Some(reply) = &outcome.reply {
         publish_assistant(&state, id, reply);
     }
@@ -78,7 +90,13 @@ async fn send(
     let session = state.sessions.get(id).await?;
     let page = state
         .timeline
-        .list(id, TimelineQuery { limit: 200, before: None })
+        .list(
+            id,
+            TimelineQuery {
+                limit: 200,
+                before: None,
+            },
+        )
         .await?;
     let staged = pending_screens(&page.items);
     if staged.is_empty() && body.note.as_deref().unwrap_or("").trim().is_empty() {
@@ -102,7 +120,11 @@ async fn send(
         &state.timeline,
         id,
         ScreenIntent::Direct,
-        &talkcer_core::ScreenFrame { png: Vec::new(), width: 0, height: 0 },
+        &talkcer_core::ScreenFrame {
+            png: Vec::new(),
+            width: 0,
+            height: 0,
+        },
         Some(&reading),
         Some(&answer.text),
     )

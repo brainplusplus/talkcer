@@ -19,26 +19,52 @@ fn path(name: &str) -> std::path::PathBuf {
 
 async fn app_with_fixture_devices(file: &std::path::Path) -> axum::Router {
     router(
-        AppState::connect_with_capture_provider(file, 30, Arc::new(FixtureDeviceProvider::default_pair()))
-            .await
-            .unwrap(),
+        AppState::connect_with_capture_provider(
+            file,
+            30,
+            Arc::new(FixtureDeviceProvider::default_pair()),
+        )
+        .await
+        .unwrap(),
         None,
     )
 }
 
-async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>, remote_token: Option<&str>) -> (StatusCode, Value) {
-    let mut builder = Request::builder().method(method).uri(uri).header("content-type", "application/json");
+async fn call(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+    remote_token: Option<&str>,
+) -> (StatusCode, Value) {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json");
     if let Some(token) = remote_token {
-        builder = builder.header("x-talkcer-client", "remote").header("authorization", format!("Bearer {token}"));
+        builder = builder
+            .header("x-talkcer-client", "remote")
+            .header("authorization", format!("Bearer {token}"));
     }
     let response = app
         .clone()
-        .oneshot(builder.body(Body::from(body.map(|value| value.to_string()).unwrap_or_default())).unwrap())
+        .oneshot(
+            builder
+                .body(Body::from(
+                    body.map(|value| value.to_string()).unwrap_or_default(),
+                ))
+                .unwrap(),
+        )
         .await
         .unwrap();
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let value = if bytes.is_empty() { Value::Null } else { serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned())) };
+    let value = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes)
+            .unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+    };
     (status, value)
 }
 
@@ -50,18 +76,46 @@ async fn capture_channels_and_remote_gate() {
     let (status, open) = call(&app, "GET", "/api/sessions", None, Some("missing")).await;
     assert_eq!(status, StatusCode::OK, "{open}");
 
-    let (status, pairing) = call(&app, "POST", "/api/remote/pair", Some(json!({ "enabled": true })), None).await;
+    let (status, pairing) = call(
+        &app,
+        "POST",
+        "/api/remote/pair",
+        Some(json!({ "enabled": true })),
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{pairing}");
     let token = pairing["token"].as_str().unwrap();
 
-    let (status, session) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Remote live", "mode": "live_interview" })), Some(token)).await;
+    let (status, session) = call(
+        &app,
+        "POST",
+        "/api/sessions",
+        Some(json!({ "title": "Remote live", "mode": "live_interview" })),
+        Some(token),
+    )
+    .await;
     assert_eq!(status, StatusCode::CREATED, "{session}");
     let id = session["id"].as_str().unwrap();
-    let (status, listed) = call(&app, "GET", "/api/sessions?mode=live_interview", None, Some(token)).await;
+    let (status, listed) = call(
+        &app,
+        "GET",
+        "/api/sessions?mode=live_interview",
+        None,
+        Some(token),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(listed["sessions"][0]["id"], id);
 
-    let (status, started) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "start" })), None).await;
+    let (status, started) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "start" })),
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{started}");
     assert_eq!(started["platform"], "windows");
     assert_eq!(started["devices"][0]["channel"], "microphone");
@@ -69,7 +123,14 @@ async fn capture_channels_and_remote_gate() {
     assert_eq!(started["devices"][1]["channel"], "system_audio");
     assert_eq!(started["devices"][1]["direction"], "render_loopback");
 
-    let (status, devices) = call(&app, "GET", &format!("/api/sessions/{id}/capture/devices"), None, None).await;
+    let (status, devices) = call(
+        &app,
+        "GET",
+        &format!("/api/sessions/{id}/capture/devices"),
+        None,
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{devices}");
     assert_eq!(devices["devices"].as_array().unwrap().len(), 2);
     assert_eq!(devices["devices"][1]["state"], "active");
@@ -85,13 +146,41 @@ async fn capture_channels_and_remote_gate() {
     assert_eq!(status_remote, StatusCode::OK);
     assert_ne!(local["item"]["id"], remote_audio["item"]["id"]);
 
-    let (_, paused) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "pause" })), None).await;
+    let (_, paused) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "pause" })),
+        None,
+    )
+    .await;
     assert_eq!(paused["state"], "paused");
-    let (_, resumed) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "resume" })), None).await;
+    let (_, resumed) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "resume" })),
+        None,
+    )
+    .await;
     assert_eq!(resumed["state"], "capturing");
-    let (_, broken) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "disconnect" })), None).await;
+    let (_, broken) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "disconnect" })),
+        None,
+    )
+    .await;
     assert_eq!(broken["state"], "error");
-    let (status, recovered) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "recover" })), None).await;
+    let (status, recovered) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "recover" })),
+        None,
+    )
+    .await;
     assert_eq!(recovered["state"], "idle");
     assert_eq!(status, StatusCode::OK);
 
@@ -102,13 +191,28 @@ async fn capture_channels_and_remote_gate() {
         &format!("/api/sessions/{id}/assistant-actions"),
         Some(json!({ "action": "explain", "target": { "kind": "utterance", "id": utterance } })),
         Some(token),
-    ).await;
+    )
+    .await;
     assert_eq!(status, StatusCode::CREATED, "{action}");
-    let (status, page) = call(&app, "GET", &format!("/api/sessions/{id}/timeline"), None, Some(token)).await;
+    let (status, page) = call(
+        &app,
+        "GET",
+        &format!("/api/sessions/{id}/timeline"),
+        None,
+        Some(token),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert!(page["items"].as_array().unwrap().len() >= 3);
 
-    let (_, disabled) = call(&app, "POST", "/api/remote/pair", Some(json!({ "enabled": false })), None).await;
+    let (_, disabled) = call(
+        &app,
+        "POST",
+        "/api/remote/pair",
+        Some(json!({ "enabled": false })),
+        None,
+    )
+    .await;
     assert_eq!(disabled["enabled"], false);
     // Turning pairing off keeps the second computer working. The LAN is the boundary.
     let (status, still_open) = call(&app, "GET", "/api/sessions", None, Some(token)).await;

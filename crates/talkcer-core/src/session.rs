@@ -179,9 +179,8 @@ fn session_from_row(row: sqlx::sqlite::SqliteRow) -> Result<Session, CoreError> 
     let created_at: String = row.try_get("created_at")?;
     let updated_at: String = row.try_get("updated_at")?;
     Ok(Session {
-        id: Uuid::parse_str(&id).map_err(|error| {
-            CoreError::Database(sqlx::Error::Decode(Box::new(error)))
-        })?,
+        id: Uuid::parse_str(&id)
+            .map_err(|error| CoreError::Database(sqlx::Error::Decode(Box::new(error))))?,
         title: row.try_get("title")?,
         mode: SessionMode::parse(&mode)?,
         status: SessionStatus::parse(&status)?,
@@ -248,10 +247,7 @@ where
     ///
     /// Returns [`CoreError::NotFound`] when the id is unknown.
     pub async fn get(&self, id: Uuid) -> Result<Session, CoreError> {
-        self.repository
-            .get(id)
-            .await?
-            .ok_or(CoreError::NotFound)
+        self.repository.get(id).await?.ok_or(CoreError::NotFound)
     }
 
     /// List sessions matching the optional mode and status filters.

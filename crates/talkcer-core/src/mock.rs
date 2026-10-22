@@ -101,7 +101,11 @@ where
     /// Returns [`CoreError::NotFound`] when the session does not exist,
     /// [`CoreError::InvalidMockAction`] when the mode or status does not allow
     /// the step, and [`CoreError::EmptyText`] when an answer is blank.
-    pub async fn turn(&self, session_id: Uuid, input: MockTurn) -> Result<MockTurnResult, CoreError> {
+    pub async fn turn(
+        &self,
+        session_id: Uuid,
+        input: MockTurn,
+    ) -> Result<MockTurnResult, CoreError> {
         let session = self.sessions.get(session_id).await?;
         if session.mode != SessionMode::MockInterview {
             return Err(CoreError::InvalidMockAction(
@@ -245,7 +249,8 @@ where
                 &summary_text,
             )
             .await?;
-        self.set_status(session_id, SessionStatus::Completed).await?;
+        self.set_status(session_id, SessionStatus::Completed)
+            .await?;
         Ok(MockTurnResult {
             status: SessionStatus::Completed,
             items: vec![answer_item, feedback, summary],

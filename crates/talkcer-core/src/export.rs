@@ -64,7 +64,13 @@ where
 {
     let session = sessions.get(session_id).await?;
     let items = timeline
-        .list(session_id, TimelineQuery { limit: 500, before: None })
+        .list(
+            session_id,
+            TimelineQuery {
+                limit: 500,
+                before: None,
+            },
+        )
         .await?
         .items;
     let body = match format {

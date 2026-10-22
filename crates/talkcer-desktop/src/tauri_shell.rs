@@ -10,9 +10,9 @@
 
 use std::sync::Arc;
 
+use talkcer_core::OverlayState;
 use tauri::{AppHandle, Manager, WebviewWindow, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-use talkcer_core::OverlayState;
 
 use crate::client::{HttpOverlayApi, OverlayApi};
 use crate::hotkeys::{self, ShortcutAction};
@@ -132,7 +132,10 @@ async fn sync_loop(handle: AppHandle, stealth: Arc<std::sync::atomic::AtomicBool
         if let Ok(preferences) = api.preferences().await {
             // The saved flag is authoritative, so Ctrl+2 and the workspace
             // toggle both drive the shell through this poll.
-            stealth.store(preferences.undetectable, std::sync::atomic::Ordering::Relaxed);
+            stealth.store(
+                preferences.undetectable,
+                std::sync::atomic::Ordering::Relaxed,
+            );
             let fingerprint = serde_json::to_value(&preferences).ok();
             if fingerprint.as_ref() != last.as_ref() {
                 last = fingerprint;
@@ -316,7 +319,11 @@ async fn open_route(handle: AppHandle, route: String) {
 /// never keeps a second copy that can drift from the workspace setting.
 async fn toggle_undetectable(handle: AppHandle) {
     let api = HttpOverlayApi::new(crate::DEFAULT_API);
-    let current = api.preferences().await.map(|saved| saved.undetectable).unwrap_or(false);
+    let current = api
+        .preferences()
+        .await
+        .map(|saved| saved.undetectable)
+        .unwrap_or(false);
     if let Err(error) = api.set_undetectable(!current).await {
         eprintln!("undetectable toggle failed: {error}");
         return;
@@ -328,7 +335,9 @@ async fn toggle_undetectable(handle: AppHandle) {
 /// Fetch the current running mode and open it.
 async fn open_current_mode(handle: AppHandle) {
     let route = match current_running().await {
-        Some(running) => hotkeys::route_for(ShortcutAction::OpenCurrentMode, Some(running)).to_owned(),
+        Some(running) => {
+            hotkeys::route_for(ShortcutAction::OpenCurrentMode, Some(running)).to_owned()
+        }
         None => "/".to_owned(),
     };
     open_route(handle, route).await;
@@ -348,7 +357,10 @@ async fn current_running() -> Option<hotkeys::RunningMode> {
     let body: serde_json::Value = response.json().await.ok()?;
     let session = body.get("session")?;
     let mode = talkcer_core::SessionMode::parse(session.get("mode")?.as_str()?).ok()?;
-    let session_id = session.get("id").and_then(|value| value.as_str()).and_then(|text| text.parse().ok());
+    let session_id = session
+        .get("id")
+        .and_then(|value| value.as_str())
+        .and_then(|text| text.parse().ok());
     Some(hotkeys::RunningMode { mode, session_id })
 }
 
@@ -405,11 +417,23 @@ pub fn run() -> tauri::Result<()> {
 
             // The tray keeps the overlay reachable when no window has focus.
             let menu = tauri::menu::MenuBuilder::new(app)
-                .text("toggle", tray::tray_label(&crate::tray::TrayItem::ToggleOverlay))
-                .text("show", tray::tray_label(&crate::tray::TrayItem::ShowOverlay))
-                .text("hide", tray::tray_label(&crate::tray::TrayItem::HideOverlay))
+                .text(
+                    "toggle",
+                    tray::tray_label(&crate::tray::TrayItem::ToggleOverlay),
+                )
+                .text(
+                    "show",
+                    tray::tray_label(&crate::tray::TrayItem::ShowOverlay),
+                )
+                .text(
+                    "hide",
+                    tray::tray_label(&crate::tray::TrayItem::HideOverlay),
+                )
                 .separator()
-                .text("workspace", tray::tray_label(&crate::tray::TrayItem::OpenWorkspace))
+                .text(
+                    "workspace",
+                    tray::tray_label(&crate::tray::TrayItem::OpenWorkspace),
+                )
                 .separator()
                 .text("quit", tray::tray_label(&crate::tray::TrayItem::Quit))
                 .build()?;
@@ -526,7 +550,10 @@ async fn overlay_click_through(app: AppHandle, enabled: bool) -> Result<serde_js
 }
 
 #[tauri::command]
-async fn overlay_follow(app: AppHandle, session_id: uuid::Uuid) -> Result<serde_json::Value, String> {
+async fn overlay_follow(
+    app: AppHandle,
+    session_id: uuid::Uuid,
+) -> Result<serde_json::Value, String> {
     let state = controller().follow(session_id).await?;
     if let Some(window) = overlay_window(&app) {
         apply_plan(&window, &state.commands).map_err(|error| error.to_string())?;

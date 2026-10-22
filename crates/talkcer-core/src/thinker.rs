@@ -81,6 +81,11 @@ pub enum ThinkerTask {
         /// The full prompt, mode stance included.
         prompt: String,
     },
+    /// A typed chat message, optionally with profile context already prepended.
+    Chat {
+        /// User prompt, profile text included when the caller asked for it.
+        prompt: String,
+    },
 }
 
 impl ThinkerTask {
@@ -99,6 +104,7 @@ impl ThinkerTask {
             Self::LearningPractice { .. } => "learning_practice",
             Self::LearningFeedback { .. } => "learning_feedback",
             Self::ScreenContext { .. } => "screen_context",
+            Self::Chat { .. } => "chat",
         }
     }
 
@@ -122,6 +128,9 @@ impl ThinkerTask {
             Self::ScreenContext { .. } => {
                 "You are answering from what is currently on screen. Stay with the session mode and do not invent details the screen does not show.".to_owned()
             }
+            Self::Chat { .. } => {
+                "You are a real-time interview copilot. Answer in at most three sentences.".to_owned()
+            }
         }
     }
 
@@ -129,7 +138,11 @@ impl ThinkerTask {
     #[must_use]
     pub fn prompt(&self) -> String {
         match self {
-            Self::AssistantAction { action, target, language } => {
+            Self::AssistantAction {
+                action,
+                target,
+                language,
+            } => {
                 let language = language
                     .as_deref()
                     .map(|value| format!(" Answer in {value}."))
@@ -147,7 +160,9 @@ impl ThinkerTask {
             }
             Self::MockFeedback => "Give one sentence of feedback on the answer.".to_owned(),
             Self::MockSummary => "Summarize the mock interview in one sentence.".to_owned(),
-            Self::LearningIntro { topic } => format!("Introduce the topic {topic} in one sentence."),
+            Self::LearningIntro { topic } => {
+                format!("Introduce the topic {topic} in one sentence.")
+            }
             Self::LearningStartPractice { topic } => {
                 format!("Give one practice task for {topic}.")
             }
@@ -160,7 +175,7 @@ impl ThinkerTask {
             Self::LearningFeedback { topic } => {
                 format!("Give one sentence of feedback on an answer about {topic}.")
             }
-            Self::ScreenContext { prompt } => prompt.clone(),
+            Self::ScreenContext { prompt } | Self::Chat { prompt } => prompt.clone(),
         }
     }
 }
@@ -209,7 +224,8 @@ impl Thinker for EmbeddedThinker {
                 format!("What tradeoff would you make in that {role} example?")
             }
             ThinkerTask::MockFeedback => {
-                "Your answers stay on the requested topic and include a concrete example.".to_owned()
+                "Your answers stay on the requested topic and include a concrete example."
+                    .to_owned()
             }
             ThinkerTask::MockSummary => {
                 "Summary: the interview covered experience and one tradeoff.".to_owned()
@@ -230,8 +246,15 @@ impl Thinker for EmbeddedThinker {
                 format!("Feedback for {topic}: your answer is specific enough to continue.")
             }
             ThinkerTask::ScreenContext { prompt } => format!("Stub screen answer: {prompt}"),
+            ThinkerTask::Chat { prompt } => {
+                let excerpt: String = prompt.chars().take(80).collect();
+                format!("(embedded) {excerpt}")
+            }
         };
-        Ok(ThinkerReply { text, provider: self.provider().to_owned() })
+        Ok(ThinkerReply {
+            text,
+            provider: self.provider().to_owned(),
+        })
     }
 
     fn provider(&self) -> &'static str {
@@ -315,7 +338,10 @@ impl Thinker for HttpThinker {
             request = request.bearer_auth(credential);
         }
         let response = request.send().await.map_err(|error| {
-            CoreError::ProviderUnavailable(format!("thinker request to {} failed: {error}", self.request_url()))
+            CoreError::ProviderUnavailable(format!(
+                "thinker request to {} failed: {error}",
+                self.request_url()
+            ))
         })?;
         let status = response.status();
         if !status.is_success() {
@@ -325,17 +351,21 @@ impl Thinker for HttpThinker {
                 detail.trim()
             )));
         }
-        let body: ChatResponse = response
-            .json()
-            .await
-            .map_err(|error| CoreError::ProviderUnavailable(format!("thinker response was not JSON: {error}")))?;
+        let body: ChatResponse = response.json().await.map_err(|error| {
+            CoreError::ProviderUnavailable(format!("thinker response was not JSON: {error}"))
+        })?;
         let text = body
             .choices
             .first()
             .map(|choice| choice.message.content.trim().to_owned())
             .filter(|value| !value.is_empty())
-            .ok_or_else(|| CoreError::ProviderUnavailable("thinker returned no content".to_owned()))?;
-        Ok(ThinkerReply { text, provider: self.provider().to_owned() })
+            .ok_or_else(|| {
+                CoreError::ProviderUnavailable("thinker returned no content".to_owned())
+            })?;
+        Ok(ThinkerReply {
+            text,
+            provider: self.provider().to_owned(),
+        })
     }
 
     fn provider(&self) -> &'static str {
@@ -403,25 +433,54 @@ pub fn select_thinker(
         }
     }
     if let Some(value) = configured.filter(|value| value.is_object()) {
-        let config: ProviderConfig = serde_json::from_value(value.clone())
-            .map_err(|error| CoreError::InvalidConfiguration(format!("thinker config is invalid: {error}")))?;
+        let config: ProviderConfig = serde_json::from_value(value.clone()).map_err(|error| {
+            CoreError::InvalidConfiguration(format!("thinker config is invalid: {error}"))
+        })?;
         return thinker_from_config(&config);
     }
     Ok(ThinkerSelection::embedded())
 }
 
-/// Validate one stored thinker slot.
+/// Resolve a one-off model against a saved configuration for that provider.
+///
+/// The first configuration whose thinker provider matches is cloned, its model
+/// is replaced, and the result is validated. This is how a chat request picks
+/// `provider:model` without rewriting the session configuration.
+///
+/// # Errors
+///
+/// Returns [`CoreError::InvalidConfiguration`] when no saved configuration uses
+/// `provider`, and the usual thinker errors when the overridden slot is incomplete.
+pub fn select_model(
+    provider: &str,
+    model: &str,
+    configurations: &[AiConfiguration],
+) -> Result<ThinkerSelection, CoreError> {
+    let provider = provider.trim();
+    let model = model.trim();
+    let Some(saved) = configurations
+        .iter()
+        .find(|item| item.thinker.provider.trim() == provider)
+    else {
+        return Err(CoreError::InvalidConfiguration(format!(
+            "provider '{provider}' is not configured"
+        )));
+    };
+    let mut config = saved.thinker.clone();
+    config.model = model.to_owned();
+    thinker_from_config(&config)
+}
+
+/// Validate one stored thinker slot against the provider registry.
 ///
 /// # Errors
 ///
 /// Returns [`CoreError`] for an unknown provider or an incomplete remote slot.
 pub fn thinker_from_config(config: &ProviderConfig) -> Result<ThinkerSelection, CoreError> {
     let provider = config.provider.trim();
-    let (known_kind, remote) = match provider {
-        "embedded-thinker" => (ProviderKind::Embedded, false),
-        "cloud-thinker" => (ProviderKind::Cloud, true),
-        "self-hosted-thinker" => (ProviderKind::SelfHosted, true),
-        other => return Err(CoreError::UnknownProvider(other.to_owned())),
+    let Some(known_kind) = crate::ai::provider_kind(crate::ai::Capability::Thinker, provider)
+    else {
+        return Err(CoreError::UnknownProvider(provider.to_owned()));
     };
     if config.kind != known_kind {
         return Err(CoreError::InvalidConfiguration(format!(
@@ -431,13 +490,16 @@ pub fn thinker_from_config(config: &ProviderConfig) -> Result<ThinkerSelection, 
     }
     let model = config.model.trim();
     if model.is_empty() {
-        return Err(CoreError::InvalidConfiguration("thinker model must not be empty".to_owned()));
+        return Err(CoreError::InvalidConfiguration(
+            "thinker model must not be empty".to_owned(),
+        ));
     }
     let endpoint = config
         .endpoint
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty());
+    let remote = matches!(known_kind, ProviderKind::SelfHosted | ProviderKind::Cloud);
     if remote {
         let endpoint = endpoint.ok_or_else(|| {
             CoreError::InvalidConfiguration(format!("thinker endpoint is required for {provider}"))
@@ -449,12 +511,18 @@ pub fn thinker_from_config(config: &ProviderConfig) -> Result<ThinkerSelection, 
         }
         if !config.consent {
             return Err(CoreError::InvalidConfiguration(
-                "thinker provider needs consent before session text leaves this computer".to_owned(),
+                "thinker provider needs consent before session text leaves this computer"
+                    .to_owned(),
             ));
         }
     }
     if known_kind == ProviderKind::Cloud
-        && config.credentials_ref.as_deref().map(str::trim).unwrap_or("").is_empty()
+        && config
+            .credentials_ref
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
     {
         return Err(CoreError::InvalidConfiguration(
             "thinker credentials_ref is required for cloud".to_owned(),

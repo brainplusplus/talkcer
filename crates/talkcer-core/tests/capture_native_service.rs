@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 
 use talkcer_core::{
     connect_and_migrate, CaptureAction, CaptureService, CaptureState, CoreError, CreateSession,
-    SessionMode, SessionService, SqliteSessionRepository, SqliteTimelineRepository, TimelineService,
+    SessionMode, SessionService, SqliteSessionRepository, SqliteTimelineRepository,
+    TimelineService,
 };
 use uuid::Uuid;
 
@@ -42,7 +43,10 @@ async fn service_start_opens_native_devices_and_reports_frames() {
     let started = match capture.control(session.id, CaptureAction::Start).await {
         Ok(status) => status,
         Err(CoreError::AudioDevice(message)) => {
-            assert!(!message.trim().is_empty(), "device error must carry a message");
+            assert!(
+                !message.trim().is_empty(),
+                "device error must carry a message"
+            );
             let _ = std::fs::remove_file(file);
             return;
         }
@@ -50,8 +54,16 @@ async fn service_start_opens_native_devices_and_reports_frames() {
     };
 
     assert_eq!(started.state, CaptureState::Capturing);
-    assert_eq!(started.devices.len(), 2, "expected microphone and system audio");
-    let channels: Vec<&str> = started.devices.iter().map(|device| device.channel.as_str()).collect();
+    assert_eq!(
+        started.devices.len(),
+        2,
+        "expected microphone and system audio"
+    );
+    let channels: Vec<&str> = started
+        .devices
+        .iter()
+        .map(|device| device.channel.as_str())
+        .collect();
     assert!(channels.contains(&"microphone"), "{channels:?}");
     assert!(channels.contains(&"system_audio"), "{channels:?}");
 
@@ -73,7 +85,10 @@ async fn service_start_opens_native_devices_and_reports_frames() {
     assert!(frames > 0, "service never reported microphone frames");
 
     // Stop must tear the readers down and return to idle.
-    let stopped = capture.control(session.id, CaptureAction::Stop).await.unwrap();
+    let stopped = capture
+        .control(session.id, CaptureAction::Stop)
+        .await
+        .unwrap();
     assert_eq!(stopped.state, CaptureState::Idle);
     let _ = std::fs::remove_file(file);
 }

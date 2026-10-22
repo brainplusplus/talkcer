@@ -18,9 +18,7 @@ impl MigrationSource {
     /// Built-in schema, currently the initial tables from the database spec.
     #[must_use]
     pub const fn embedded() -> Self {
-        Self {
-            files: EMBEDDED,
-        }
+        Self { files: EMBEDDED }
     }
 
     /// Version and SQL pairs in apply order.
@@ -50,6 +48,14 @@ const EMBEDDED: &[(&str, &str)] = &[
     (
         "005_profile.sql",
         include_str!("../../../migrations/005_profile.sql"),
+    ),
+    (
+        "006_provider_selection.sql",
+        include_str!("../../../migrations/006_provider_selection.sql"),
+    ),
+    (
+        "007_audio_selection.sql",
+        include_str!("../../../migrations/007_audio_selection.sql"),
     ),
 ];
 

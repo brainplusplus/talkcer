@@ -1,4 +1,4 @@
-﻿//! HTTP tests for learning continuation and browser voice.
+//! HTTP tests for learning continuation and browser voice.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -15,7 +15,12 @@ fn path(name: &str) -> std::path::PathBuf {
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+async fn http(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let response = app
         .clone()
         .oneshot(
@@ -23,7 +28,9 @@ async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
                 .method(method)
                 .uri(uri)
                 .header("content-type", "application/json")
-                .body(Body::from(body.map(|value| value.to_string()).unwrap_or_default()))
+                .body(Body::from(
+                    body.map(|value| value.to_string()).unwrap_or_default(),
+                ))
                 .unwrap(),
         )
         .await
@@ -33,7 +40,8 @@ async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
     let value = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+        serde_json::from_slice(&bytes)
+            .unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, value)
 }
@@ -55,7 +63,13 @@ async fn learning_history_survives_reopen() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{session}");
     let id = session["id"].as_str().unwrap();
-    let (status, started) = http(&app, "POST", &format!("/api/sessions/{id}/learning"), Some(json!({ "action": "start" }))).await;
+    let (status, started) = http(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/learning"),
+        Some(json!({ "action": "start" })),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{started}");
     http(
         &app,
@@ -82,7 +96,13 @@ async fn learning_history_survives_reopen() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{continued}");
-    let (status, page) = http(&reopened, "GET", &format!("/api/sessions/{id}/timeline"), None).await;
+    let (status, page) = http(
+        &reopened,
+        "GET",
+        &format!("/api/sessions/{id}/timeline"),
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(page["items"].as_array().unwrap().len(), 10);
     let _ = std::fs::remove_file(file);
@@ -96,7 +116,9 @@ async fn voice_partial_final_and_tts_playback() {
         &app,
         "POST",
         "/api/sessions",
-        Some(json!({ "title": "Voice", "mode": "learning", "configuration": { "tts": "disabled" } })),
+        Some(
+            json!({ "title": "Voice", "mode": "learning", "configuration": { "tts": "disabled" } }),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{session}");

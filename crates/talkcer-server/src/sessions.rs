@@ -63,7 +63,9 @@ async fn list(
             return Err(ApiError(CoreError::GroupedFilterConflict));
         }
         let grouped: SessionsByMode = state.sessions.grouped_by_mode().await?;
-        return Ok(Json(serde_json::to_value(grouped).expect("sessions serialize")));
+        return Ok(Json(
+            serde_json::to_value(grouped).expect("sessions serialize"),
+        ));
     }
 
     let sessions = state.sessions.list(&filter).await?;

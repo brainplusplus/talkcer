@@ -18,47 +18,55 @@ impl From<CoreError> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status = match &self.0 {
-            CoreError::InvalidMode(_)
-            | CoreError::InvalidStatus(_)
-            | CoreError::InvalidTransition { .. }
-            | CoreError::EmptyTitle
-            | CoreError::EmptyText
-            | CoreError::GroupedFilterConflict
-            | CoreError::InvalidSpeaker(_)
-            | CoreError::InvalidSource(_)
-            | CoreError::InvalidItemKind(_)
-            | CoreError::InvalidPurpose(_)
-            | CoreError::InvalidAction(_)
-            | CoreError::InvalidTarget
-            | CoreError::InvalidTimestamp
-            | CoreError::InvalidLimit
-            | CoreError::InvalidProviderKind(_)
-            | CoreError::InvalidConfiguration(_)
-            | CoreError::UnknownProvider(_)
-            | CoreError::InvalidCapability(_)
-            | CoreError::EmptyName
-            | CoreError::InvalidMockAction(_)
-            | CoreError::InvalidLearningAction(_)
-            | CoreError::InvalidAudio(_)
-            | CoreError::InvalidCapture(_)
-            | CoreError::InvalidOverlay(_)
-            | CoreError::InvalidExport(_)
-            | CoreError::InvalidProfile(_) => StatusCode::BAD_REQUEST,
-            CoreError::AudioDevice(_)
-            | CoreError::Transcription(_)
-            | CoreError::ProviderUnavailable(_)
-            | CoreError::Screen(_) => StatusCode::SERVICE_UNAVAILABLE,
-            CoreError::Unauthorized => StatusCode::UNAUTHORIZED,
-            CoreError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
-            CoreError::ProviderTimeout => StatusCode::GATEWAY_TIMEOUT,
-            CoreError::UtteranceClosed | CoreError::UtteranceSessionMismatch => StatusCode::CONFLICT,
-            CoreError::NotFound | CoreError::ItemNotFound => StatusCode::NOT_FOUND,
-            CoreError::Database(_) | CoreError::Migration(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
+        let status = status_code(&self.0);
         let body = Json(json!({
             "error": self.0.to_string(),
         }));
         (status, body).into_response()
+    }
+}
+
+fn status_code(error: &CoreError) -> StatusCode {
+    match error {
+        CoreError::InvalidMode(_)
+        | CoreError::InvalidStatus(_)
+        | CoreError::InvalidTransition { .. }
+        | CoreError::EmptyTitle
+        | CoreError::EmptyText
+        | CoreError::GroupedFilterConflict
+        | CoreError::InvalidSpeaker(_)
+        | CoreError::InvalidSource(_)
+        | CoreError::InvalidItemKind(_)
+        | CoreError::InvalidPurpose(_)
+        | CoreError::InvalidAction(_)
+        | CoreError::InvalidTarget
+        | CoreError::InvalidTimestamp
+        | CoreError::InvalidLimit
+        | CoreError::InvalidProviderKind(_)
+        | CoreError::InvalidConfiguration(_)
+        | CoreError::UnknownProvider(_)
+        | CoreError::InvalidCapability(_)
+        | CoreError::EmptyName
+        | CoreError::InvalidMockAction(_)
+        | CoreError::InvalidLearningAction(_)
+        | CoreError::InvalidAudio(_)
+        | CoreError::InvalidCapture(_)
+        | CoreError::InvalidOverlay(_)
+        | CoreError::InvalidExport(_)
+        | CoreError::InvalidProfile(_) => StatusCode::BAD_REQUEST,
+        CoreError::AudioDevice(_)
+        | CoreError::Transcription(_)
+        | CoreError::ProviderUnavailable(_)
+        | CoreError::Screen(_) => StatusCode::SERVICE_UNAVAILABLE,
+        CoreError::Unauthorized => StatusCode::UNAUTHORIZED,
+        CoreError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+        CoreError::ProviderTimeout => StatusCode::GATEWAY_TIMEOUT,
+        CoreError::UtteranceClosed
+        | CoreError::UtteranceSessionMismatch
+        | CoreError::DownloadInProgress => StatusCode::CONFLICT,
+        CoreError::NotFound | CoreError::ItemNotFound | CoreError::ModelNotFound { .. } => {
+            StatusCode::NOT_FOUND
+        }
+        CoreError::Database(_) | CoreError::Migration(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

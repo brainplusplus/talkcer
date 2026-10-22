@@ -1,4 +1,4 @@
-﻿//! End-to-end AI pipeline over the HTTP API.
+//! End-to-end AI pipeline over the HTTP API.
 //!
 //! A saved self-hosted thinker and a self-hosted TTS configuration point at
 //! local mock servers, so these tests verify the whole seam: assistant actions,
@@ -22,7 +22,12 @@ fn path(name: &str) -> std::path::PathBuf {
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+async fn call(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let response = app
         .clone()
         .oneshot(
@@ -30,7 +35,9 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
                 .method(method)
                 .uri(uri)
                 .header("content-type", "application/json")
-                .body(Body::from(body.map(|value| value.to_string()).unwrap_or_default()))
+                .body(Body::from(
+                    body.map(|value| value.to_string()).unwrap_or_default(),
+                ))
                 .unwrap(),
         )
         .await
@@ -40,7 +47,8 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
     let value = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+        serde_json::from_slice(&bytes)
+            .unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, value)
 }
@@ -145,7 +153,13 @@ async fn configured_thinker_and_tts_drive_every_ai_route() {
     let (endpoint, seen) = mock_provider_server().await;
     let app = router(AppState::connect(&file).await.unwrap(), None);
 
-    let (status, saved) = call(&app, "PUT", "/api/config/ai", Some(remote_configuration(&endpoint))).await;
+    let (status, saved) = call(
+        &app,
+        "PUT",
+        "/api/config/ai",
+        Some(remote_configuration(&endpoint)),
+    )
+    .await;
     assert_eq!(status, StatusCode::CREATED, "{saved}");
     let configuration_id = saved["id"].as_str().unwrap();
 
@@ -216,7 +230,10 @@ async fn configured_thinker_and_tts_drive_every_ai_route() {
         spoken["audio_base64"].as_str().unwrap(),
     )
     .unwrap();
-    assert!(audio.starts_with(b"RIFF"), "the embedded tone leaked through");
+    assert!(
+        audio.starts_with(b"RIFF"),
+        "the embedded tone leaked through"
+    );
 
     // 3. A mock interview uses the same remote model.
     let (status, mock_session) = call(
@@ -271,11 +288,17 @@ async fn configured_thinker_and_tts_drive_every_ai_route() {
     // Every route reached the remote endpoint, and speech was distinct from chat.
     let lines = seen.lock().unwrap().clone();
     assert!(
-        lines.iter().filter(|line| line.starts_with("POST /v1/chat/completions ")).count() >= 4,
+        lines
+            .iter()
+            .filter(|line| line.starts_with("POST /v1/chat/completions "))
+            .count()
+            >= 4,
         "expected four chat completions, saw {lines:?}"
     );
     assert!(
-        lines.iter().any(|line| line.starts_with("POST /v1/audio/speech ")),
+        lines
+            .iter()
+            .any(|line| line.starts_with("POST /v1/audio/speech ")),
         "expected a speech request, saw {lines:?}"
     );
     let _ = std::fs::remove_file(file);

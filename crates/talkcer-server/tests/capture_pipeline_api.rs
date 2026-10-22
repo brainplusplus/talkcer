@@ -1,4 +1,4 @@
-﻿//! End-to-end pipeline test over the HTTP API.
+//! End-to-end pipeline test over the HTTP API.
 //!
 //! A scripted device provider stands in for real audio, and the background pump
 //! drains it into transcripts. This covers the wiring the web client relies on:
@@ -29,8 +29,14 @@ fn scripted() -> ScriptedDeviceProvider {
 fn device(channel: &str) -> CaptureDevice {
     CaptureDevice {
         channel: channel.to_owned(),
+        id: format!("Scripted {channel}"),
         name: format!("Scripted {channel}"),
-        direction: if channel == "system_audio" { "render_loopback" } else { "capture" }.to_owned(),
+        direction: if channel == "system_audio" {
+            "render_loopback"
+        } else {
+            "capture"
+        }
+        .to_owned(),
         state: "active".to_owned(),
         sample_rate: 48_000,
         channels: 2,
@@ -38,12 +44,19 @@ fn device(channel: &str) -> CaptureDevice {
     }
 }
 
-async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+async fn call(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .body(Body::from(body.map(|value| value.to_string()).unwrap_or_default()))
+        .body(Body::from(
+            body.map(|value| value.to_string()).unwrap_or_default(),
+        ))
         .unwrap();
     let response = app.clone().oneshot(request).await.unwrap();
     let status = response.status();
@@ -51,7 +64,8 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
     let value = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+        serde_json::from_slice(&bytes)
+            .unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, value)
 }
@@ -59,15 +73,29 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
 #[tokio::test]
 async fn pump_transcribes_scripted_audio_into_the_timeline() {
     let file = path("pipeline-api");
-    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(scripted())).await.unwrap();
+    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(scripted()))
+        .await
+        .unwrap();
     let app = router(state.clone(), None);
     let pump = spawn_pump(state);
 
-    let (status, session) = call(&app, "POST", "/api/sessions", Some(json!({ "title": "Live", "mode": "live_interview" }))).await;
+    let (status, session) = call(
+        &app,
+        "POST",
+        "/api/sessions",
+        Some(json!({ "title": "Live", "mode": "live_interview" })),
+    )
+    .await;
     assert_eq!(status, StatusCode::CREATED, "{session}");
     let id = session["id"].as_str().unwrap();
 
-    let (status, started) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "start" }))).await;
+    let (status, started) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "start" })),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{started}");
     assert_eq!(started["devices"].as_array().unwrap().len(), 2);
 
@@ -83,14 +111,29 @@ async fn pump_transcribes_scripted_audio_into_the_timeline() {
     }
     pump.abort();
 
-    let speakers: Vec<&str> = items.iter().filter_map(|item| item["speaker"].as_str()).collect();
+    let speakers: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["speaker"].as_str())
+        .collect();
     assert!(speakers.contains(&"local_user"), "timeline: {items:?}");
     assert!(speakers.contains(&"remote"), "timeline: {items:?}");
-    let texts: Vec<&str> = items.iter().filter_map(|item| item["text"].as_str()).collect();
+    let texts: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["text"].as_str())
+        .collect();
     assert!(texts.contains(&"I can hear you."), "timeline: {items:?}");
-    assert!(texts.contains(&"Tell me about retries."), "timeline: {items:?}");
+    assert!(
+        texts.contains(&"Tell me about retries."),
+        "timeline: {items:?}"
+    );
 
-    let (_, stopped) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "stop" }))).await;
+    let (_, stopped) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "stop" })),
+    )
+    .await;
     assert_eq!(stopped["state"], "idle");
     let _ = std::fs::remove_file(file);
 }
@@ -102,13 +145,54 @@ async fn global_audio_devices_route_reports_the_provider() {
         (device("microphone"), utf8_pcm("a")),
         (device("system_audio"), utf8_pcm("b")),
     ]);
-    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider)).await.unwrap();
+    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider))
+        .await
+        .unwrap();
     let app = router(state, None);
 
     let (status, body) = call(&app, "GET", "/api/devices/audio", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["devices"].as_array().unwrap().len(), 2);
     assert_eq!(body["devices"][1]["direction"], "render_loopback");
+    let _ = std::fs::remove_file(file);
+}
+
+#[tokio::test]
+async fn audio_selection_round_trips_through_the_api() {
+    let file = path("audio-selection-api");
+    let provider = ScriptedDeviceProvider::new(vec![
+        (device("microphone"), utf8_pcm("a")),
+        (device("system_audio"), utf8_pcm("b")),
+    ]);
+    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider))
+        .await
+        .unwrap();
+    let app = router(state, None);
+
+    let (status, empty) = call(&app, "GET", "/api/audio/selection", None).await;
+    assert_eq!(status, StatusCode::OK, "{empty}");
+    assert_eq!(empty["microphone"], "");
+    assert_eq!(empty["microphone_model"], "");
+
+    let (status, saved) = call(
+        &app,
+        "PUT",
+        "/api/audio/selection",
+        Some(json!({
+            "microphone": "  mic-a  ",
+            "playback": "speakers-b",
+            "microphone_model": "whisper:tiny",
+            "system_model": ""
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    assert_eq!(saved["microphone"], "mic-a", "trimmed on save");
+    assert_eq!(saved["microphone_model"], "whisper:tiny");
+
+    let (_, reread) = call(&app, "GET", "/api/audio/selection", None).await;
+    assert_eq!(reread["playback"], "speakers-b");
+    assert_eq!(reread["system_model"], "");
     let _ = std::fs::remove_file(file);
 }
 
@@ -177,7 +261,9 @@ async fn session_stt_selection_drives_the_pipeline_end_to_end() {
         (device("microphone"), vec![9_u8; 48_000 * 4]),
         (device("system_audio"), vec![9_u8; 48_000 * 4]),
     ]);
-    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider)).await.unwrap();
+    let state = AppState::connect_with_capture_provider(&file, 30, Arc::new(provider))
+        .await
+        .unwrap();
     let app = router(state.clone(), None);
     let pump = spawn_pump(state);
 
@@ -217,7 +303,13 @@ async fn session_stt_selection_drives_the_pipeline_end_to_end() {
     assert_eq!(status, StatusCode::CREATED, "{session}");
     let id = session["id"].as_str().unwrap();
 
-    let (status, started) = call(&app, "POST", &format!("/api/sessions/{id}/capture"), Some(json!({ "action": "start" }))).await;
+    let (status, started) = call(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/capture"),
+        Some(json!({ "action": "start" })),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{started}");
 
     let mut items = Vec::new();
@@ -231,12 +323,18 @@ async fn session_stt_selection_drives_the_pipeline_end_to_end() {
     }
     pump.abort();
 
-    assert!(items.len() >= 2, "the configured endpoint produced no transcript: {items:?}");
+    assert!(
+        items.len() >= 2,
+        "the configured endpoint produced no transcript: {items:?}"
+    );
     for item in &items {
         assert_eq!(item["text"], "recognized by the endpoint");
         assert_eq!(item["metadata"]["stt_provider"], "http-stt");
     }
-    let speakers: Vec<&str> = items.iter().filter_map(|item| item["speaker"].as_str()).collect();
+    let speakers: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["speaker"].as_str())
+        .collect();
     assert!(speakers.contains(&"local_user"), "{items:?}");
     assert!(speakers.contains(&"remote"), "{items:?}");
     let _ = std::fs::remove_file(file);

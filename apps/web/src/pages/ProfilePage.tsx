@@ -59,14 +59,18 @@ export function ProfilePage() {
   }
 
   return (
-    <section className="stack wide">
-      <h2>Profile</h2>
-      <p className="meta">
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>Profile</h2>
+          <p className="lede">
         This is you, not the assistant. A session can hand it to the model when you tick
         "add profile context", so an interview answer can draw on your real experience.
         Birth date and birth place stay out of that context.
-      </p>
-
+          </p>
+        </div>
+      </header>
+      <div className="sheet pad">
       <label>
         Upload a CV to fill the form
         <input
@@ -135,6 +139,7 @@ export function ProfilePage() {
       </button>
       {save.isSuccess && <p className="meta">Saved.</p>}
       {save.isError && <p className="error">{(save.error as Error).message}</p>}
+      </div>
     </section>
   );
 }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use axum::extract::{Multipart, State};
 use axum::{Json, Router};
 use talkcer_core::{
-    build_thinker, credential_from_env, thinker_from_config, parse_cv_fields, read_cv, CvDraft,
+    build_thinker, credential_from_env, parse_cv_fields, read_cv, thinker_from_config, CvDraft,
     CvSource, Profile, SaveProfile, Thinker, ThinkerTask,
 };
 
@@ -36,12 +36,12 @@ async fn save(
 async fn cv(State(state): State<AppState>, mut form: Multipart) -> Result<Json<CvDraft>, ApiError> {
     let mut filename = String::from("cv");
     let mut bytes = Vec::new();
-    while let Some(field) = form
-        .next_field()
-        .await
-        .map_err(|error: axum::extract::multipart::MultipartError| {
-            talkcer_core::CoreError::InvalidProfile(error.to_string())
-        })?
+    while let Some(field) =
+        form.next_field()
+            .await
+            .map_err(|error: axum::extract::multipart::MultipartError| {
+                talkcer_core::CoreError::InvalidProfile(error.to_string())
+            })?
     {
         if field.name() != Some("file") {
             continue;
@@ -61,7 +61,9 @@ async fn cv(State(state): State<AppState>, mut form: Multipart) -> Result<Json<C
     }
     match configured_thinker(&state).await {
         Some(thinker) => match thinker
-            .complete(&ThinkerTask::ScreenContext { prompt: talkcer_core::cv_prompt(&draft.text) })
+            .complete(&ThinkerTask::ScreenContext {
+                prompt: talkcer_core::cv_prompt(&draft.text),
+            })
             .await
         {
             Ok(reply) => {
@@ -79,9 +81,8 @@ async fn cv(State(state): State<AppState>, mut form: Multipart) -> Result<Json<C
             }
         },
         None => {
-            draft.warning = Some(
-                "no model is configured, so the raw text is shown instead".to_owned(),
-            );
+            draft.warning =
+                Some("no model is configured, so the raw text is shown instead".to_owned());
         }
     }
     Ok(Json(draft))
@@ -99,6 +100,9 @@ async fn configured_thinker(state: &AppState) -> Option<Arc<dyn Thinker>> {
     if !selection.is_remote() {
         return None;
     }
-    let credential = selection.credentials_ref.as_deref().and_then(credential_from_env);
+    let credential = selection
+        .credentials_ref
+        .as_deref()
+        .and_then(credential_from_env);
     build_thinker(&selection, credential).ok()
 }

@@ -25,7 +25,12 @@ fn segment() -> Segment {
     }
 }
 
-fn config(kind: ProviderKind, provider: &str, endpoint: Option<&str>, consent: bool) -> ProviderConfig {
+fn config(
+    kind: ProviderKind,
+    provider: &str,
+    endpoint: Option<&str>,
+    consent: bool,
+) -> ProviderConfig {
     ProviderConfig {
         kind,
         provider: provider.to_owned(),
@@ -60,7 +65,12 @@ fn session_without_configuration_uses_the_embedded_provider() {
 
 #[test]
 fn session_can_select_a_saved_configuration_by_id() {
-    let mut stt = config(ProviderKind::SelfHosted, "self-hosted-stt", Some("http://127.0.0.1:9000/v1"), true);
+    let mut stt = config(
+        ProviderKind::SelfHosted,
+        "self-hosted-stt",
+        Some("http://127.0.0.1:9000/v1"),
+        true,
+    );
     stt.model = "large-v3".to_owned();
     let saved = AiConfiguration {
         id: Uuid::now_v7(),
@@ -75,7 +85,10 @@ fn session_can_select_a_saved_configuration_by_id() {
     let selection = select_stt(&session, std::slice::from_ref(&saved)).unwrap();
     assert_eq!(selection.provider, "self-hosted-stt");
     assert_eq!(selection.model, "large-v3");
-    assert_eq!(selection.endpoint.as_deref(), Some("http://127.0.0.1:9000/v1"));
+    assert_eq!(
+        selection.endpoint.as_deref(),
+        Some("http://127.0.0.1:9000/v1")
+    );
     assert!(selection.is_remote());
 }
 
@@ -131,6 +144,53 @@ fn cloud_selection_requires_a_credential_reference() {
 }
 
 #[test]
+fn the_session_page_choice_is_read_from_stt_model() {
+    // The session page writes `provider:model` under `stt_model`. Capture used
+    // to read `stt` only, so the picker looked connected but changed nothing.
+    let session = Session {
+        configuration: serde_json::json!({ "stt_model": "whisper:tiny" }),
+        ..session_with_stt(serde_json::Value::Null)
+    };
+    let selection = select_stt(&session, &[]).unwrap();
+    assert_eq!(selection.kind, ProviderKind::Embedded);
+    assert_eq!(selection.provider, "whisper");
+    assert_eq!(selection.model, "tiny");
+}
+
+#[test]
+fn a_stt_model_choice_uses_the_saved_configuration_for_its_provider() {
+    let mut saved = config(
+        ProviderKind::Cloud,
+        "deepgram",
+        Some("https://api.deepgram.test/v1"),
+        true,
+    );
+    saved.credentials_ref = Some("deepgram-prod".to_owned());
+    let saved = AiConfiguration {
+        id: Uuid::now_v7(),
+        name: "deepgram".to_owned(),
+        stt: saved,
+        thinker: config(ProviderKind::Embedded, "embedded-thinker", None, false),
+        tts: config(ProviderKind::Embedded, "disabled-tts", None, false),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    let session = Session {
+        configuration: serde_json::json!({ "stt_model": "deepgram:nova-3" }),
+        ..session_with_stt(serde_json::Value::Null)
+    };
+    let selection = select_stt(&session, std::slice::from_ref(&saved)).unwrap();
+    assert_eq!(selection.provider, "deepgram");
+    assert_eq!(selection.model, "nova-3");
+    assert_eq!(
+        selection.endpoint.as_deref(),
+        Some("https://api.deepgram.test/v1")
+    );
+    assert_eq!(selection.credentials_ref.as_deref(), Some("deepgram-prod"));
+    assert!(selection.is_remote());
+}
+
+#[test]
 fn build_transcriber_matches_the_selection() {
     let embedded = build_transcriber(&SttSelection::embedded(), None).unwrap();
     assert_eq!(embedded.provider(), "embedded-stt");
@@ -152,7 +212,10 @@ fn build_transcriber_matches_the_selection() {
 #[test]
 fn credential_lookup_sanitizes_the_reference() {
     std::env::set_var("TALKCER_SECRET_OPENAI_PROD", "value-1");
-    assert_eq!(credential_from_env("openai-prod").as_deref(), Some("value-1"));
+    assert_eq!(
+        credential_from_env("openai-prod").as_deref(),
+        Some("value-1")
+    );
     std::env::remove_var("TALKCER_SECRET_OPENAI_PROD");
     assert!(credential_from_env("openai-prod").is_none());
     assert!(credential_from_env("").is_none());
@@ -165,11 +228,17 @@ fn wav_header_describes_the_payload() {
     assert_eq!(&wav[0..4], b"RIFF");
     assert_eq!(&wav[8..12], b"WAVE");
     assert_eq!(&wav[12..16], b"fmt ");
-    assert_eq!(u32::from_le_bytes([wav[24], wav[25], wav[26], wav[27]]), 48_000);
+    assert_eq!(
+        u32::from_le_bytes([wav[24], wav[25], wav[26], wav[27]]),
+        48_000
+    );
     assert_eq!(u16::from_le_bytes([wav[22], wav[23]]), 2);
     assert_eq!(u16::from_le_bytes([wav[34], wav[35]]), 16);
     assert_eq!(&wav[36..40], b"data");
-    assert_eq!(u32::from_le_bytes([wav[40], wav[41], wav[42], wav[43]]), 100);
+    assert_eq!(
+        u32::from_le_bytes([wav[40], wav[41], wav[42], wav[43]]),
+        100
+    );
     assert_eq!(wav.len(), 44 + 100);
 }
 
@@ -198,7 +267,12 @@ async fn mock_stt_server() -> (String, tokio::task::JoinHandle<String>) {
                 let head = &text[..headers_end];
                 let length = head
                     .lines()
-                    .find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:").map(str::trim).map(str::to_owned))
+                    .find_map(|line| {
+                        line.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(str::trim)
+                            .map(str::to_owned)
+                    })
                     .and_then(|value| value.parse::<usize>().ok())
                     .unwrap_or(0);
                 if request.len() >= headers_end + 4 + length {
@@ -223,14 +297,23 @@ async fn mock_stt_server() -> (String, tokio::task::JoinHandle<String>) {
 async fn http_adapter_posts_multipart_and_reads_the_text() {
     let (endpoint, server) = mock_stt_server().await;
     let transcriber = HttpSttTranscriber::new(&endpoint, "whisper-1", "en", None);
-    assert_eq!(transcriber.request_url(), format!("{endpoint}/audio/transcriptions"));
+    assert_eq!(
+        transcriber.request_url(),
+        format!("{endpoint}/audio/transcriptions")
+    );
 
     let text = transcriber.transcribe(&segment()).await.unwrap();
     assert_eq!(text.as_deref(), Some("hello from the endpoint"));
 
     let request = server.await.unwrap();
-    assert!(request.starts_with("POST /v1/audio/transcriptions "), "{request}");
-    assert!(request.to_ascii_lowercase().contains("multipart/form-data"), "{request}");
+    assert!(
+        request.starts_with("POST /v1/audio/transcriptions "),
+        "{request}"
+    );
+    assert!(
+        request.to_ascii_lowercase().contains("multipart/form-data"),
+        "{request}"
+    );
     assert!(request.contains("audio.wav"), "{request}");
     assert!(request.contains("whisper-1"), "{request}");
 }
@@ -253,8 +336,13 @@ async fn http_adapter_surfaces_a_non_success_status() {
         socket.write_all(response.as_bytes()).await.unwrap();
     });
 
-    let transcriber = HttpSttTranscriber::new(format!("http://{address}/v1"), "whisper-1", "en", None);
-    let error = transcriber.transcribe(&segment()).await.unwrap_err().to_string();
+    let transcriber =
+        HttpSttTranscriber::new(format!("http://{address}/v1"), "whisper-1", "en", None);
+    let error = transcriber
+        .transcribe(&segment())
+        .await
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("401"), "{error}");
 }
 
@@ -266,8 +354,12 @@ async fn fixed_resolver_supplies_the_pipeline_transcriber() {
     assert_eq!(transcriber.provider(), "embedded-stt");
 
     // The resolver trait is object safe, which the service relies on.
-    let boxed: Arc<dyn SttResolver> = Arc::new(FixedSttResolver::new(Arc::new(EmbeddedTranscriber)));
-    assert_eq!(boxed.resolve(&session).await.unwrap().provider(), "embedded-stt");
+    let boxed: Arc<dyn SttResolver> =
+        Arc::new(FixedSttResolver::new(Arc::new(EmbeddedTranscriber)));
+    assert_eq!(
+        boxed.resolve(&session).await.unwrap().provider(),
+        "embedded-stt"
+    );
 }
 
 #[tokio::test]
@@ -284,7 +376,12 @@ async fn saved_configuration_round_trips_through_the_service() {
         .save(SaveAiConfiguration {
             id: None,
             name: "local".to_owned(),
-            stt: config(ProviderKind::SelfHosted, "self-hosted-stt", Some("http://127.0.0.1:9000/v1"), true),
+            stt: config(
+                ProviderKind::SelfHosted,
+                "self-hosted-stt",
+                Some("http://127.0.0.1:9000/v1"),
+                true,
+            ),
             thinker: config(ProviderKind::Embedded, "embedded-thinker", None, false),
             tts: config(ProviderKind::Embedded, "disabled-tts", None, false),
         })
@@ -294,7 +391,11 @@ async fn saved_configuration_round_trips_through_the_service() {
     assert!(result.ok, "{}", result.message);
 
     let listed = service.list().await.unwrap();
-    let selection = select_stt(&session_with_stt(serde_json::json!(saved.id.to_string())), &listed).unwrap();
+    let selection = select_stt(
+        &session_with_stt(serde_json::json!(saved.id.to_string())),
+        &listed,
+    )
+    .unwrap();
     assert_eq!(selection.provider, "self-hosted-stt");
 
     // A cloud slot without consent is rejected before it is stored.
@@ -302,7 +403,12 @@ async fn saved_configuration_round_trips_through_the_service() {
         .save(SaveAiConfiguration {
             id: None,
             name: "cloud".to_owned(),
-            stt: config(ProviderKind::Cloud, "cloud-stt", Some("https://api.example.test/v1"), false),
+            stt: config(
+                ProviderKind::Cloud,
+                "cloud-stt",
+                Some("https://api.example.test/v1"),
+                false,
+            ),
             thinker: config(ProviderKind::Embedded, "embedded-thinker", None, false),
             tts: config(ProviderKind::Embedded, "disabled-tts", None, false),
         })
@@ -317,7 +423,8 @@ async fn session_creation_accepts_an_stt_selection() {
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join(format!("stt-session-{}.sqlite", Uuid::now_v7()));
     let pool = talkcer_core::connect_and_migrate(&file).await.unwrap();
-    let sessions = talkcer_core::SessionService::new(talkcer_core::SqliteSessionRepository::new(pool));
+    let sessions =
+        talkcer_core::SessionService::new(talkcer_core::SqliteSessionRepository::new(pool));
     let session = sessions
         .create(CreateSession {
             title: "Live".to_owned(),

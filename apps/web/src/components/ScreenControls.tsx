@@ -50,7 +50,7 @@ export function ScreenControls({ sessionId, onChange }: { sessionId: string; onC
         <input type="checkbox" checked={direct} onChange={(event) => setDirect(event.target.checked)} />
         Answer immediately
       </label>
-      <button type="button" disabled={pending} onClick={() => void capture()}>
+      <button type="button" className="primary" disabled={pending} onClick={() => void capture()}>
         {direct ? "Capture and answer" : "Capture to context"}
       </button>
       {!direct && (

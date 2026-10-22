@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
+import { Combobox } from "../components/Combobox";
 import {
   getAiConfigurations,
   getProviders,
@@ -63,8 +64,13 @@ export function AiConfigPage() {
   }
 
   return (
-    <section className="stack">
-      <h2>AI configuration</h2>
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>AI configuration</h2>
+        </div>
+      </header>
+      <div className="sheet pad">
       {configurations.isLoading && <p className="muted">Loading configuration…</p>}
       {configurations.data && configurations.data.length === 0 && <p className="muted">No configuration saved yet.</p>}
       {configurations.data?.map((item) => (
@@ -90,24 +96,17 @@ export function AiConfigPage() {
         {(["stt", "thinker", "tts"] as Capability[]).map((capability) => (
           <fieldset key={capability}>
             <legend>{capability}</legend>
-            <label>
-              Provider
-              <select
-                value={slots[capability].provider}
-                onChange={(event) => {
-                  const selected = providers.data?.find((item) => item.provider === event.target.value);
-                  update(capability, { provider: event.target.value, kind: selected?.kind ?? slots[capability].kind });
-                }}
-              >
-                {providers.data
-                  ?.filter((item) => item.capability === capability)
-                  .map((item) => (
-                    <option key={item.provider} value={item.provider}>
-                      {item.provider}
-                    </option>
-                  ))}
-              </select>
-            </label>
+            <Combobox
+              label="Provider"
+              value={slots[capability].provider}
+              options={(providers.data ?? [])
+                .filter((item) => item.capability === capability)
+                .map((item) => ({ value: item.provider, label: item.provider }))}
+              onChange={(next) => {
+                const selected = providers.data?.find((item) => item.provider === next);
+                update(capability, { provider: next, kind: selected?.kind ?? slots[capability].kind });
+              }}
+            />
             <p className="meta">{capabilityText(providers.data?.find((item) => item.provider === slots[capability].provider))}</p>
             <label>
               Kind
@@ -154,6 +153,7 @@ export function AiConfigPage() {
       </form>
       {message && <p className="meta">{message}</p>}
       {error && <p className="error">{error}</p>}
+      </div>
     </section>
   );
 }

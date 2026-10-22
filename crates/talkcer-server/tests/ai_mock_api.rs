@@ -1,4 +1,4 @@
-﻿//! HTTP tests for AI configuration and the text mock interview.
+//! HTTP tests for AI configuration and the text mock interview.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -14,7 +14,12 @@ fn path(name: &str) -> std::path::PathBuf {
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+async fn http(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let response = app
         .clone()
         .oneshot(
@@ -22,7 +27,9 @@ async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
                 .method(method)
                 .uri(uri)
                 .header("content-type", "application/json")
-                .body(Body::from(body.map(|value| value.to_string()).unwrap_or_default()))
+                .body(Body::from(
+                    body.map(|value| value.to_string()).unwrap_or_default(),
+                ))
                 .unwrap(),
         )
         .await
@@ -32,7 +39,8 @@ async fn http(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) 
     let value = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+        serde_json::from_slice(&bytes)
+            .unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
     };
     (status, value)
 }
@@ -64,7 +72,12 @@ async fn configuration_round_trip_and_provider_catalog() {
     let app = router(AppState::connect(&file).await.unwrap(), None);
     let (status, providers) = http(&app, "GET", "/api/config/ai/providers", None).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(providers.as_array().unwrap().iter().any(|item| item["provider"] == "embedded-stt" && item["capabilities"]["supports_partial_transcript"] == true));
+    assert!(providers
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item["provider"] == "embedded-stt"
+            && item["capabilities"]["supports_partial_transcript"] == true));
 
     let (status, saved) = http(&app, "PUT", "/api/config/ai", Some(configuration())).await;
     assert_eq!(status, StatusCode::CREATED, "{saved}");
@@ -118,7 +131,13 @@ async fn mock_interview_transcript_survives_restart() {
     assert_eq!(status, StatusCode::CREATED, "{session}");
     let id = session["id"].as_str().unwrap();
 
-    let (status, started) = http(&app, "POST", &format!("/api/sessions/{id}/mock"), Some(json!({ "action": "start" }))).await;
+    let (status, started) = http(
+        &app,
+        "POST",
+        &format!("/api/sessions/{id}/mock"),
+        Some(json!({ "action": "start" })),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{started}");
     assert_eq!(started["status"], "active");
 
@@ -144,10 +163,31 @@ async fn mock_interview_transcript_survives_restart() {
 
     drop(app);
     let reopened = router(AppState::connect(&file).await.unwrap(), None);
-    let (status, page) = http(&reopened, "GET", &format!("/api/sessions/{id}/timeline"), None).await;
+    let (status, page) = http(
+        &reopened,
+        "GET",
+        &format!("/api/sessions/{id}/timeline"),
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    let turns: Vec<_> = page["items"].as_array().unwrap().iter().map(|item| item["metadata"]["turn"].as_str().unwrap()).collect();
-    assert_eq!(turns, ["question", "answer", "follow_up", "answer", "feedback", "summary"]);
+    let turns: Vec<_> = page["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["metadata"]["turn"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        turns,
+        [
+            "question",
+            "answer",
+            "follow_up",
+            "answer",
+            "feedback",
+            "summary"
+        ]
+    );
     let (status, loaded) = http(&reopened, "GET", &format!("/api/sessions/{id}"), None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(loaded["status"], "completed");

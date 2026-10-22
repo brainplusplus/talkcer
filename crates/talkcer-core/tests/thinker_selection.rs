@@ -13,7 +13,12 @@ use talkcer_core::{
 };
 use uuid::Uuid;
 
-fn config(kind: ProviderKind, provider: &str, endpoint: Option<&str>, consent: bool) -> ProviderConfig {
+fn config(
+    kind: ProviderKind,
+    provider: &str,
+    endpoint: Option<&str>,
+    consent: bool,
+) -> ProviderConfig {
     ProviderConfig {
         kind,
         provider: provider.to_owned(),
@@ -76,7 +81,10 @@ fn session_can_select_a_saved_configuration_by_id() {
     let selection = select_thinker(&session, std::slice::from_ref(&saved)).unwrap();
     assert_eq!(selection.provider, "self-hosted-thinker");
     assert_eq!(selection.model, "qwen2.5-7b");
-    assert_eq!(selection.endpoint.as_deref(), Some("http://127.0.0.1:9000/v1"));
+    assert_eq!(
+        selection.endpoint.as_deref(),
+        Some("http://127.0.0.1:9000/v1")
+    );
     assert!(selection.is_remote());
 }
 
@@ -157,11 +165,8 @@ async fn embedded_thinker_matches_the_offline_templates() {
     assert_eq!(reply.provider, "embedded-thinker");
     assert_eq!(
         reply.text,
-        talkcer_core::stub_assistant_text(
-            talkcer_core::AssistantAction::Explain,
-            Uuid::nil(),
-        )
-        .replace(&Uuid::nil().to_string(), "explain retries"),
+        talkcer_core::stub_assistant_text(talkcer_core::AssistantAction::Explain, Uuid::nil(),)
+            .replace(&Uuid::nil().to_string(), "explain retries"),
     );
 
     let question = thinker
@@ -212,7 +217,8 @@ async fn mock_chat_server() -> (String, tokio::task::JoinHandle<String>) {
                 }
             }
         }
-        let body = r#"{"choices":[{"message":{"role":"assistant","content":"  A short answer.  "}}]}"#;
+        let body =
+            r#"{"choices":[{"message":{"role":"assistant","content":"  A short answer.  "}}]}"#;
         let response = format!(
             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
             body.len(),
@@ -229,15 +235,24 @@ async fn mock_chat_server() -> (String, tokio::task::JoinHandle<String>) {
 async fn http_adapter_posts_a_chat_body_and_reads_the_text() {
     let (endpoint, server) = mock_chat_server().await;
     let thinker = HttpThinker::new(&endpoint, "gpt-4o-mini", "en", None);
-    assert_eq!(thinker.request_url(), format!("{endpoint}/chat/completions"));
+    assert_eq!(
+        thinker.request_url(),
+        format!("{endpoint}/chat/completions")
+    );
 
     let reply = thinker.complete(&assistant_task()).await.unwrap();
     assert_eq!(reply.text, "A short answer.");
     assert_eq!(reply.provider, "http-thinker");
 
     let request = server.await.unwrap();
-    assert!(request.starts_with("POST /v1/chat/completions "), "{request}");
-    assert!(request.to_ascii_lowercase().contains("application/json"), "{request}");
+    assert!(
+        request.starts_with("POST /v1/chat/completions "),
+        "{request}"
+    );
+    assert!(
+        request.to_ascii_lowercase().contains("application/json"),
+        "{request}"
+    );
     assert!(request.contains("gpt-4o-mini"), "{request}");
     assert!(request.contains("explain retries"), "{request}");
 }
@@ -261,7 +276,11 @@ async fn http_adapter_surfaces_a_non_success_status() {
     });
 
     let thinker = HttpThinker::new(format!("http://{address}/v1"), "gpt-4o-mini", "en", None);
-    let error = thinker.complete(&assistant_task()).await.unwrap_err().to_string();
+    let error = thinker
+        .complete(&assistant_task())
+        .await
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("401"), "{error}");
 }
 
@@ -273,8 +292,12 @@ async fn fixed_resolver_supplies_the_service_thinker() {
     assert_eq!(thinker.provider(), "embedded-thinker");
 
     // The resolver trait is object safe, which the services rely on.
-    let boxed: Arc<dyn ThinkerResolver> = Arc::new(FixedThinkerResolver::new(Arc::new(EmbeddedThinker)));
-    assert_eq!(boxed.resolve(&session).await.unwrap().provider(), "embedded-thinker");
+    let boxed: Arc<dyn ThinkerResolver> =
+        Arc::new(FixedThinkerResolver::new(Arc::new(EmbeddedThinker)));
+    assert_eq!(
+        boxed.resolve(&session).await.unwrap().provider(),
+        "embedded-thinker"
+    );
 }
 
 #[tokio::test]
@@ -302,12 +325,18 @@ async fn saved_configuration_round_trips_through_the_service() {
         })
         .await
         .unwrap();
-    let result = service.test(saved.id, talkcer_core::Capability::Thinker).await.unwrap();
+    let result = service
+        .test(saved.id, talkcer_core::Capability::Thinker)
+        .await
+        .unwrap();
     assert!(result.ok, "{}", result.message);
 
     let listed = service.list().await.unwrap();
-    let selection =
-        select_thinker(&session_with_thinker(serde_json::json!(saved.id.to_string())), &listed).unwrap();
+    let selection = select_thinker(
+        &session_with_thinker(serde_json::json!(saved.id.to_string())),
+        &listed,
+    )
+    .unwrap();
     assert_eq!(selection.provider, "self-hosted-thinker");
 
     // A cloud slot without consent is rejected before it is stored.
@@ -335,7 +364,8 @@ async fn session_creation_accepts_a_thinker_selection() {
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join(format!("thinker-session-{}.sqlite", Uuid::now_v7()));
     let pool = talkcer_core::connect_and_migrate(&file).await.unwrap();
-    let sessions = talkcer_core::SessionService::new(talkcer_core::SqliteSessionRepository::new(pool));
+    let sessions =
+        talkcer_core::SessionService::new(talkcer_core::SqliteSessionRepository::new(pool));
     let session = sessions
         .create(CreateSession {
             title: "Live".to_owned(),

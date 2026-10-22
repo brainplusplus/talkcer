@@ -151,7 +151,12 @@ where
             )
             .await?;
         let intro = self
-            .think(session, ThinkerTask::LearningIntro { topic: topic.clone() })
+            .think(
+                session,
+                ThinkerTask::LearningIntro {
+                    topic: topic.clone(),
+                },
+            )
             .await?;
         let discussion = self
             .append(
@@ -304,7 +309,14 @@ where
         text: &str,
     ) -> Result<TimelineItem, CoreError> {
         self.timeline
-            .append_item(session_id, kind, speaker, purpose, text.to_owned(), json!({ "turn": turn }))
+            .append_item(
+                session_id,
+                kind,
+                speaker,
+                purpose,
+                text.to_owned(),
+                json!({ "turn": turn }),
+            )
             .await
     }
 }

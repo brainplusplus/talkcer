@@ -187,7 +187,9 @@ impl OverlayController {
         let assistant = action
             .assistant_action()
             .ok_or_else(|| "action needs no model".to_owned())?;
-        self.api.assistant_action(session_id, assistant, target.id).await?;
+        self.api
+            .assistant_action(session_id, assistant, target.id)
+            .await?;
         self.refresh().await
     }
 

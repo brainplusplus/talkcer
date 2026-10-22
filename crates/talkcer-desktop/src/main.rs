@@ -18,7 +18,10 @@ fn main() {
         println!("Talkcer desktop shell (headless)");
         println!("API: {}", talkcer_desktop::DEFAULT_API);
         println!("Workspace: {}", talkcer_desktop::tray::WORKSPACE_URL);
-        println!("Overlay shortcut: {}", talkcer_desktop::overlay::OVERLAY_SHORTCUT);
+        println!(
+            "Overlay shortcut: {}",
+            talkcer_desktop::overlay::OVERLAY_SHORTCUT
+        );
         println!("Build with --features tauri-shell to open the native window.");
     }
 }

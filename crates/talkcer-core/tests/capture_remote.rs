@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use talkcer_core::{
-    connect_and_migrate, CaptureAction, CaptureFixture, CaptureService, CaptureState, CreateSession,
-    FixtureDeviceProvider, RemoteAccessService, SessionMode, SessionService, SqliteSessionRepository,
-    SqliteTimelineRepository, TimelineQuery, TimelineService,
+    connect_and_migrate, CaptureAction, CaptureFixture, CaptureService, CaptureState,
+    CreateSession, FixtureDeviceProvider, RemoteAccessService, SessionMode, SessionService,
+    SqliteSessionRepository, SqliteTimelineRepository, TimelineQuery, TimelineService,
 };
 use uuid::Uuid;
 
@@ -39,66 +39,130 @@ async fn windows_capture_keeps_channels_separate_and_recovers() {
         .await
         .unwrap();
     let capture = fixture_capture(&pool);
-    let started = capture.control(session.id, CaptureAction::Start).await.unwrap();
+    let started = capture
+        .control(session.id, CaptureAction::Start)
+        .await
+        .unwrap();
     assert_eq!(started.state, CaptureState::Capturing);
     assert_eq!(started.devices.len(), 2);
     assert_eq!(started.devices[0].channel, "microphone");
     assert_eq!(started.devices[1].channel, "system_audio");
     assert_eq!(started.devices[1].direction, "render_loopback");
     let local = capture
-        .inject(session.id, CaptureFixture {
-            channel: "microphone".to_owned(),
-            utterance_id: None,
-            text: "I".to_owned(),
-            started_at_ms: 10,
-            is_final: false,
-        })
+        .inject(
+            session.id,
+            CaptureFixture {
+                channel: "microphone".to_owned(),
+                utterance_id: None,
+                text: "I".to_owned(),
+                started_at_ms: 10,
+                is_final: false,
+            },
+        )
         .await
         .unwrap();
     let local_final = capture
-        .inject(session.id, CaptureFixture {
-            channel: "microphone".to_owned(),
-            utterance_id: Some(local.item.id),
-            text: "I can hear you.".to_owned(),
-            started_at_ms: 10,
-            is_final: true,
-        })
+        .inject(
+            session.id,
+            CaptureFixture {
+                channel: "microphone".to_owned(),
+                utterance_id: Some(local.item.id),
+                text: "I can hear you.".to_owned(),
+                started_at_ms: 10,
+                is_final: true,
+            },
+        )
         .await
         .unwrap();
     let remote = capture
-        .inject(session.id, CaptureFixture {
-            channel: "system_audio".to_owned(),
-            utterance_id: None,
-            text: "Tell me about retries.".to_owned(),
-            started_at_ms: 20,
-            is_final: true,
-        })
+        .inject(
+            session.id,
+            CaptureFixture {
+                channel: "system_audio".to_owned(),
+                utterance_id: None,
+                text: "Tell me about retries.".to_owned(),
+                started_at_ms: 20,
+                is_final: true,
+            },
+        )
         .await
         .unwrap();
     assert_ne!(local_final.item.id, remote.item.id);
     assert_eq!(local_final.item.speaker.as_str(), "local_user");
     assert_eq!(remote.item.speaker.as_str(), "remote");
 
-    assert_eq!(capture.control(session.id, CaptureAction::Pause).await.unwrap().state, CaptureState::Paused);
-    assert!(capture.inject(session.id, CaptureFixture {
-        channel: "microphone".to_owned(), utterance_id: None, text: "late".to_owned(), started_at_ms: 30, is_final: true,
-    }).await.is_err());
-    assert_eq!(capture.control(session.id, CaptureAction::Resume).await.unwrap().state, CaptureState::Capturing);
-    let error = capture.control(session.id, CaptureAction::Disconnect).await.unwrap();
+    assert_eq!(
+        capture
+            .control(session.id, CaptureAction::Pause)
+            .await
+            .unwrap()
+            .state,
+        CaptureState::Paused
+    );
+    assert!(capture
+        .inject(
+            session.id,
+            CaptureFixture {
+                channel: "microphone".to_owned(),
+                utterance_id: None,
+                text: "late".to_owned(),
+                started_at_ms: 30,
+                is_final: true,
+            }
+        )
+        .await
+        .is_err());
+    assert_eq!(
+        capture
+            .control(session.id, CaptureAction::Resume)
+            .await
+            .unwrap()
+            .state,
+        CaptureState::Capturing
+    );
+    let error = capture
+        .control(session.id, CaptureAction::Disconnect)
+        .await
+        .unwrap();
     assert_eq!(error.state, CaptureState::Error);
-    assert_eq!(capture.control(session.id, CaptureAction::Recover).await.unwrap().state, CaptureState::Idle);
-    assert_eq!(capture.control(session.id, CaptureAction::Stop).await.unwrap().state, CaptureState::Idle);
+    assert_eq!(
+        capture
+            .control(session.id, CaptureAction::Recover)
+            .await
+            .unwrap()
+            .state,
+        CaptureState::Idle
+    );
+    assert_eq!(
+        capture
+            .control(session.id, CaptureAction::Stop)
+            .await
+            .unwrap()
+            .state,
+        CaptureState::Idle
+    );
 
     let reopened = CaptureService::new(
         SessionService::new(SqliteSessionRepository::new(pool.clone())),
         TimelineService::new(SqliteTimelineRepository::new(pool.clone())),
         pool,
     );
-    assert_eq!(reopened.status(session.id).await.unwrap().platform, "windows");
-    let page = TimelineService::new(SqliteTimelineRepository::new(connect_and_migrate(&file).await.unwrap()))
-        .list(session.id, TimelineQuery { limit: 100, before: None })
-        .await
-        .unwrap();
+    assert_eq!(
+        reopened.status(session.id).await.unwrap().platform,
+        "windows"
+    );
+    let page = TimelineService::new(SqliteTimelineRepository::new(
+        connect_and_migrate(&file).await.unwrap(),
+    ))
+    .list(
+        session.id,
+        TimelineQuery {
+            limit: 100,
+            before: None,
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(page.items.len(), 2);
     let _ = std::fs::remove_file(file);
 }

@@ -14,9 +14,14 @@ export function PrivacyPage() {
   });
 
   return (
-    <section className="stack">
-      <h2>Privacy</h2>
-      <p className="meta">
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>Privacy</h2>
+        </div>
+      </header>
+      <div className="sheet pad">
+      <p className="lede">
         Undetectable mode keeps Talkcer out of screen captures and recordings, hides the
         taskbar button, removes the tray icon, and replaces the window title with a neutral
         system name. The desktop shell applies it within half a second and re-asserts the
@@ -33,6 +38,7 @@ export function PrivacyPage() {
       </button>
       <p className="meta">Shortcut: Ctrl+2.</p>
       {toggle.isError && <p className="error">{(toggle.error as Error).message}</p>}
+      </div>
     </section>
   );
 }

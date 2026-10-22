@@ -137,7 +137,12 @@ impl OverlayApi for FakeApi {
         action: AssistantAction,
         target_id: Uuid,
     ) -> Result<(), String> {
-        self.record(&format!("assistant:{}:{}:{}", session_id, action.as_str(), target_id));
+        self.record(&format!(
+            "assistant:{}:{}:{}",
+            session_id,
+            action.as_str(),
+            target_id
+        ));
         Ok(())
     }
 }
@@ -195,7 +200,10 @@ fn visible_overlay_stays_on_top_and_click_through_ignores_the_pointer() {
     let shown = overlay::plan(&preferences(OverlayState::Visible));
     assert!(matches!(
         shown[0],
-        WindowCommand::Show { always_on_top: true, .. }
+        WindowCommand::Show {
+            always_on_top: true,
+            ..
+        }
     ));
     let clicked = overlay::plan(&preferences(OverlayState::ClickThrough));
     assert!(clicked.contains(&WindowCommand::IgnoreCursor(true)));
@@ -209,18 +217,39 @@ fn shortcut_matches_the_overlay_toggle() {
 
 #[test]
 fn overlay_state_machine_matches_the_docs() {
-    assert!(overlay::can_transition(OverlayState::Hidden, OverlayState::Visible));
-    assert!(overlay::can_transition(OverlayState::Visible, OverlayState::ClickThrough));
-    assert!(overlay::can_transition(OverlayState::ClickThrough, OverlayState::Visible));
-    assert!(overlay::can_transition(OverlayState::Visible, OverlayState::Hidden));
+    assert!(overlay::can_transition(
+        OverlayState::Hidden,
+        OverlayState::Visible
+    ));
+    assert!(overlay::can_transition(
+        OverlayState::Visible,
+        OverlayState::ClickThrough
+    ));
+    assert!(overlay::can_transition(
+        OverlayState::ClickThrough,
+        OverlayState::Visible
+    ));
+    assert!(overlay::can_transition(
+        OverlayState::Visible,
+        OverlayState::Hidden
+    ));
     // A hidden overlay never jumps straight to click-through.
-    assert!(!overlay::can_transition(OverlayState::Hidden, OverlayState::ClickThrough));
+    assert!(!overlay::can_transition(
+        OverlayState::Hidden,
+        OverlayState::ClickThrough
+    ));
 }
 
 #[test]
 fn closing_the_overlay_hides_it_without_quitting() {
-    assert_eq!(shell::close_plan(OverlayState::Visible), vec![WindowCommand::Hide]);
-    assert_eq!(shell::close_plan(OverlayState::ClickThrough), vec![WindowCommand::Hide]);
+    assert_eq!(
+        shell::close_plan(OverlayState::Visible),
+        vec![WindowCommand::Hide]
+    );
+    assert_eq!(
+        shell::close_plan(OverlayState::ClickThrough),
+        vec![WindowCommand::Hide]
+    );
 }
 
 #[test]
@@ -284,11 +313,14 @@ fn subscription_ignores_other_sessions_and_classifies_overlay_events() {
         EventOutcome::Ignore
     );
     assert_eq!(
-        subscription.classify(&serde_json::json!({ "type": "overlay.state_changed", "visible": true })),
+        subscription
+            .classify(&serde_json::json!({ "type": "overlay.state_changed", "visible": true })),
         EventOutcome::RefreshPreferences
     );
     assert_eq!(
-        subscription.classify(&serde_json::json!({ "type": "capture.state_changed", "session_id": active })),
+        subscription.classify(
+            &serde_json::json!({ "type": "capture.state_changed", "session_id": active })
+        ),
         EventOutcome::Ignore
     );
 }
@@ -301,7 +333,8 @@ fn hidden_subscription_accepts_nothing() {
     let subscription = Subscription::from_preferences(&prefs);
     assert!(!subscription.accepts(active));
     assert_eq!(
-        subscription.classify(&serde_json::json!({ "type": "transcript.updated", "session_id": active })),
+        subscription
+            .classify(&serde_json::json!({ "type": "transcript.updated", "session_id": active })),
         EventOutcome::Ignore
     );
 }
@@ -309,8 +342,12 @@ fn hidden_subscription_accepts_nothing() {
 #[tokio::test]
 async fn hidden_overlay_loads_no_items() {
     let session = Uuid::now_v7();
-    let api = FakeApi::new(Some(session))
-        .with_items(vec![item(session, Speaker::Remote, "secret", true)]);
+    let api = FakeApi::new(Some(session)).with_items(vec![item(
+        session,
+        Speaker::Remote,
+        "secret",
+        true,
+    )]);
     let state = controller(&api).refresh().await.unwrap();
     assert_eq!(state.preferences.state, OverlayState::Hidden);
     assert!(state.items.is_empty());
@@ -329,7 +366,10 @@ async fn show_move_opacity_and_hide_update_the_window_plan() {
     assert_eq!(shown.preferences.state, OverlayState::Visible);
     assert!(matches!(
         shown.commands[0],
-        WindowCommand::Show { always_on_top: true, .. }
+        WindowCommand::Show {
+            always_on_top: true,
+            ..
+        }
     ));
 
     let moved = controller.move_to(300, 400).await.unwrap();
@@ -340,7 +380,9 @@ async fn show_move_opacity_and_hide_update_the_window_plan() {
 
     let dimmed = controller.set_opacity(0.4).await.unwrap();
     assert!((dimmed.preferences.opacity - 0.4).abs() < f64::EPSILON);
-    assert!(matches!(dimmed.commands[0], WindowCommand::Show { opacity, .. } if (opacity - 0.4).abs() < f64::EPSILON));
+    assert!(
+        matches!(dimmed.commands[0], WindowCommand::Show { opacity, .. } if (opacity - 0.4).abs() < f64::EPSILON)
+    );
 
     let hidden = controller.hide().await.unwrap();
     assert_eq!(hidden.preferences.state, OverlayState::Hidden);
@@ -377,8 +419,18 @@ async fn session_switch_drops_the_previous_session_items() {
 #[tokio::test]
 async fn quick_action_targets_the_latest_remote_utterance() {
     let session = Uuid::now_v7();
-    let remote = item(session, Speaker::Remote, "How would you handle retries?", true);
-    let local = item(session, Speaker::LocalUser, "I would use idempotency keys.", true);
+    let remote = item(
+        session,
+        Speaker::Remote,
+        "How would you handle retries?",
+        true,
+    );
+    let local = item(
+        session,
+        Speaker::LocalUser,
+        "I would use idempotency keys.",
+        true,
+    );
     let api = FakeApi::new(Some(session)).with_items(vec![remote.clone(), local]);
     let controller = controller(&api);
     controller.toggle().await.unwrap();
@@ -394,21 +446,36 @@ async fn quick_action_targets_the_latest_remote_utterance() {
     // The overlay footer offers every action when a remote utterance exists.
     assert_eq!(
         state.actions,
-        vec![QuickAction::Explain, QuickAction::Translate, QuickAction::SuggestPoints, QuickAction::Hide]
+        vec![
+            QuickAction::Explain,
+            QuickAction::Translate,
+            QuickAction::SuggestPoints,
+            QuickAction::Hide
+        ]
     );
 }
 
 #[tokio::test]
 async fn quick_action_refuses_without_a_remote_target() {
     let session = Uuid::now_v7();
-    let api = FakeApi::new(Some(session))
-        .with_items(vec![item(session, Speaker::LocalUser, "only me", true)]);
+    let api = FakeApi::new(Some(session)).with_items(vec![item(
+        session,
+        Speaker::LocalUser,
+        "only me",
+        true,
+    )]);
     let controller = controller(&api);
     controller.toggle().await.unwrap();
 
-    let error = controller.quick_action(QuickAction::Translate).await.unwrap_err();
+    let error = controller
+        .quick_action(QuickAction::Translate)
+        .await
+        .unwrap_err();
     assert!(error.contains("no remote transcript"), "{error}");
-    assert!(!api.calls().iter().any(|call| call.starts_with("assistant:")));
+    assert!(!api
+        .calls()
+        .iter()
+        .any(|call| call.starts_with("assistant:")));
 }
 
 #[tokio::test]
@@ -421,7 +488,10 @@ async fn hide_quick_action_never_calls_the_model() {
     let state = controller.quick_action(QuickAction::Hide).await.unwrap();
     assert_eq!(state.preferences.state, OverlayState::Hidden);
     assert_eq!(state.commands, vec![WindowCommand::Hide]);
-    assert!(!api.calls().iter().any(|call| call.starts_with("assistant:")));
+    assert!(!api
+        .calls()
+        .iter()
+        .any(|call| call.starts_with("assistant:")));
 }
 
 #[tokio::test]
@@ -435,14 +505,20 @@ async fn subscription_event_triggers_a_refresh_only_when_relevant() {
     let controller = controller(&api);
 
     let ignored = controller
-        .on_event(&subscription, &serde_json::json!({ "type": "transcript.updated", "session_id": other }))
+        .on_event(
+            &subscription,
+            &serde_json::json!({ "type": "transcript.updated", "session_id": other }),
+        )
         .await
         .unwrap();
     assert!(ignored.is_none());
     assert!(api.calls().is_empty());
 
     let refreshed = controller
-        .on_event(&subscription, &serde_json::json!({ "type": "transcript.updated", "session_id": active }))
+        .on_event(
+            &subscription,
+            &serde_json::json!({ "type": "transcript.updated", "session_id": active }),
+        )
         .await
         .unwrap();
     assert!(refreshed.is_some());
@@ -453,13 +529,18 @@ async fn subscription_event_triggers_a_refresh_only_when_relevant() {
 fn quick_action_labels_and_actions_match_the_ui_spec() {
     assert_eq!(tray::quick_actions().len(), 4);
     assert_eq!(QuickAction::Explain.label(), "Explain");
-    assert_eq!(QuickAction::SuggestPoints.assistant_action(), Some(AssistantAction::SuggestPoints));
+    assert_eq!(
+        QuickAction::SuggestPoints.assistant_action(),
+        Some(AssistantAction::SuggestPoints)
+    );
     assert_eq!(QuickAction::Hide.assistant_action(), None);
 }
 
 #[test]
 fn desktop_points_at_the_local_api() {
     assert_eq!(talkcer_desktop::VERSION, "0.1.0");
-    assert_eq!(talkcer_desktop::server_bind(), "127.0.0.1:54000");
+    // The server listens on every interface so a phone on the same network can
+    // reach it; the desktop still talks to loopback.
+    assert_eq!(talkcer_desktop::server_bind(), "0.0.0.0:54000");
     assert_eq!(talkcer_desktop::DEFAULT_API, "http://127.0.0.1:54000/api");
 }

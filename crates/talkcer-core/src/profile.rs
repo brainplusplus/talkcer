@@ -110,7 +110,12 @@ impl Profile {
                 lines.push(format!("Education: {header}"));
             }
         }
-        let skills: Vec<&str> = self.skills.iter().map(|skill| skill.trim()).filter(|skill| !skill.is_empty()).collect();
+        let skills: Vec<&str> = self
+            .skills
+            .iter()
+            .map(|skill| skill.trim())
+            .filter(|skill| !skill.is_empty())
+            .collect();
         if !skills.is_empty() {
             lines.push(format!("Skills: {}", skills.join(", ")));
         }
@@ -373,7 +378,9 @@ pub fn read_cv(filename: &str, bytes: &[u8]) -> Result<CvDraft, CoreError> {
         return Err(CoreError::InvalidProfile("the file is empty".to_owned()));
     }
     if bytes.len() > MAX_CV_BYTES {
-        return Err(CoreError::InvalidProfile("the file is larger than 5 MB".to_owned()));
+        return Err(CoreError::InvalidProfile(
+            "the file is larger than 5 MB".to_owned(),
+        ));
     }
     let name = filename.to_ascii_lowercase();
     let text = if name.ends_with(".pdf") {
@@ -387,8 +394,15 @@ pub fn read_cv(filename: &str, bytes: &[u8]) -> Result<CvDraft, CoreError> {
             "upload a PDF, DOCX, or text file".to_owned(),
         ));
     };
-    match text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
-        Some(text) => Ok(CvDraft { text, source: CvSource::FileText, warning: None }),
+    match text
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        Some(text) => Ok(CvDraft {
+            text,
+            source: CvSource::FileText,
+            warning: None,
+        }),
         None => Ok(CvDraft {
             text: String::new(),
             source: CvSource::FileText,
@@ -423,7 +437,11 @@ pub fn parse_cv_fields(raw: &str) -> SaveProfile {
     let value: Value = serde_json::from_str(json).unwrap_or(Value::Null);
     let object = value.as_object();
     let text = |key: &str| {
-        object.and_then(|map| map.get(key)).and_then(Value::as_str).unwrap_or("").to_owned()
+        object
+            .and_then(|map| map.get(key))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned()
     };
     SaveProfile {
         name: text("name"),
@@ -480,7 +498,10 @@ fn pdf_text(bytes: &[u8]) -> Option<String> {
             continue;
         }
         let literal: String = chars[..end].iter().collect();
-        let literal = literal.replace("\\n", "\n").replace("\\(", "(").replace("\\)", ")");
+        let literal = literal
+            .replace("\\n", "\n")
+            .replace("\\(", "(")
+            .replace("\\)", ")");
         if literal.chars().any(char::is_alphanumeric) {
             if !out.is_empty() {
                 out.push(' ');
@@ -506,8 +527,12 @@ fn docx_text(bytes: &[u8]) -> Option<String> {
     for part in xml.split("</w:p>") {
         let mut line = String::new();
         for node in part.split("<w:t") {
-            let Some(start) = node.find('>') else { continue };
-            let Some(end) = node[start + 1..].find("</w:t>") else { continue };
+            let Some(start) = node.find('>') else {
+                continue;
+            };
+            let Some(end) = node[start + 1..].find("</w:t>") else {
+                continue;
+            };
             line.push_str(&decode_xml(&node[start + 1..start + 1 + end]));
         }
         let line = line.trim().to_owned();

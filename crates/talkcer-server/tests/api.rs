@@ -1,4 +1,4 @@
-﻿//! HTTP acceptance tests for Task 1 health and Task 2 session CRUD.
+//! HTTP acceptance tests for Task 1 health and Task 2 session CRUD.
 
 use std::path::PathBuf;
 
@@ -149,7 +149,9 @@ async fn session_crud_and_grouping() {
         &app,
         Request::patch(format!("/api/sessions/{id}"))
             .header("content-type", "application/json")
-            .body(Body::from(json!({"title": "Renamed", "status": "active"}).to_string()))
+            .body(Body::from(
+                json!({"title": "Renamed", "status": "active"}).to_string(),
+            ))
             .unwrap(),
     )
     .await;
@@ -188,5 +190,8 @@ async fn invalid_filter_mode_is_rejected() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(body["error"].as_str().unwrap().contains("invalid session mode"));
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("invalid session mode"));
 }

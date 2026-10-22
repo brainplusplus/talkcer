@@ -178,7 +178,10 @@ pub fn decode_text(bytes: &[u8]) -> Option<String> {
         return None;
     }
     let total = trimmed.chars().count();
-    let printable = trimmed.chars().filter(|character| !character.is_control()).count();
+    let printable = trimmed
+        .chars()
+        .filter(|character| !character.is_control())
+        .count();
     if printable * 2 < total {
         return None;
     }
@@ -258,12 +261,74 @@ pub fn select_stt(
     }
 
     if let Some(value) = configured.filter(|value| value.is_object()) {
-        let config: ProviderConfig = serde_json::from_value(value.clone())
-            .map_err(|error| CoreError::InvalidConfiguration(format!("stt config is invalid: {error}")))?;
+        let config: ProviderConfig = serde_json::from_value(value.clone()).map_err(|error| {
+            CoreError::InvalidConfiguration(format!("stt config is invalid: {error}"))
+        })?;
         return selection_from_config(&config);
     }
 
+    // The session page stores its pick as `provider:model` under `stt_model`.
+    if let Some(Value::String(choice)) = session.configuration.get("stt_model") {
+        if !choice.trim().is_empty() {
+            return selection_for_model(choice, configurations);
+        }
+    }
+
     Ok(SttSelection::embedded())
+}
+
+/// Turn a `provider:model` pick into an STT selection.
+///
+/// Endpoint, credential, and consent come from the first saved configuration
+/// for that provider, so the picker does not repeat them. A provider with no
+/// saved configuration can still run when it is local.
+///
+/// # Errors
+///
+/// Returns [`CoreError::InvalidConfiguration`] when the value is not
+/// `provider:model` or a remote provider has no saved configuration, and
+/// [`CoreError::UnknownProvider`] for an unknown provider.
+pub fn selection_for_model(
+    choice: &str,
+    configurations: &[AiConfiguration],
+) -> Result<SttSelection, CoreError> {
+    let (provider, model) = choice.split_once(':').ok_or_else(|| {
+        CoreError::InvalidConfiguration(format!(
+            "stt model '{choice}' must be provider:model"
+        ))
+    })?;
+    let provider = provider.trim();
+    let model = model.trim();
+    if provider.is_empty() || model.is_empty() {
+        return Err(CoreError::InvalidConfiguration(format!(
+            "stt model '{choice}' must name a provider and a model"
+        )));
+    }
+    let kind = crate::ai::provider_kind(crate::ai::Capability::Stt, provider)
+        .ok_or_else(|| CoreError::UnknownProvider(provider.to_owned()))?;
+    if let Some(config) = configurations
+        .iter()
+        .map(|item| &item.stt)
+        .find(|item| item.provider.trim() == provider)
+    {
+        return selection_from_config(&ProviderConfig {
+            model: model.to_owned(),
+            ..config.clone()
+        });
+    }
+    if kind != ProviderKind::Embedded {
+        return Err(CoreError::InvalidConfiguration(format!(
+            "'{provider}' needs a saved configuration before it can transcribe"
+        )));
+    }
+    Ok(SttSelection {
+        provider: provider.to_owned(),
+        kind,
+        model: model.to_owned(),
+        endpoint: None,
+        credentials_ref: None,
+        language: "en".to_owned(),
+    })
 }
 
 /// Validate one stored STT slot and turn it into a selection.
@@ -274,14 +339,20 @@ pub fn select_stt(
 /// missing endpoint or credential, or a remote provider without consent.
 pub fn selection_from_config(config: &ProviderConfig) -> Result<SttSelection, CoreError> {
     let provider = config.provider.trim();
-    let (known_kind, remote) = match provider {
-        "embedded-stt" => (ProviderKind::Embedded, false),
-        "cloud-stt" => (ProviderKind::Cloud, true),
-        "self-hosted-stt" => (ProviderKind::SelfHosted, true),
-        other => {
-            return Err(CoreError::UnknownProvider(other.to_owned()));
-        }
+    // Both the legacy slot names and the catalog provider ids are accepted, so
+    // a model picked as `deepgram:nova-3` validates the same way a saved slot
+    // does. An unknown name still fails.
+    let known_kind = match provider {
+        "embedded-stt" => ProviderKind::Embedded,
+        "cloud-stt" => ProviderKind::Cloud,
+        "self-hosted-stt" => ProviderKind::SelfHosted,
+        other => crate::ai::provider_kind(crate::ai::Capability::Stt, other)
+            .ok_or_else(|| CoreError::UnknownProvider(other.to_owned()))?,
     };
+    let remote = matches!(
+        known_kind,
+        ProviderKind::SelfHosted | ProviderKind::Cloud
+    );
     if config.kind != known_kind {
         return Err(CoreError::InvalidConfiguration(format!(
             "stt provider '{provider}' requires kind {}",
@@ -290,7 +361,9 @@ pub fn selection_from_config(config: &ProviderConfig) -> Result<SttSelection, Co
     }
     let model = config.model.trim();
     if model.is_empty() {
-        return Err(CoreError::InvalidConfiguration("stt model must not be empty".to_owned()));
+        return Err(CoreError::InvalidConfiguration(
+            "stt model must not be empty".to_owned(),
+        ));
     }
     let endpoint = config
         .endpoint
@@ -313,7 +386,12 @@ pub fn selection_from_config(config: &ProviderConfig) -> Result<SttSelection, Co
         }
     }
     if known_kind == ProviderKind::Cloud
-        && config.credentials_ref.as_deref().map(str::trim).unwrap_or("").is_empty()
+        && config
+            .credentials_ref
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
     {
         return Err(CoreError::InvalidConfiguration(
             "stt credentials_ref is required for cloud".to_owned(),
@@ -433,12 +511,17 @@ impl Transcriber for HttpSttTranscriber {
             .text("model", self.model.clone())
             .text("language", self.language.clone())
             .text("response_format", "json");
-        let mut request = reqwest::Client::new().post(self.request_url()).multipart(form);
+        let mut request = reqwest::Client::new()
+            .post(self.request_url())
+            .multipart(form);
         if let Some(credential) = &self.credential {
             request = request.bearer_auth(credential);
         }
         let response = request.send().await.map_err(|error| {
-            CoreError::Transcription(format!("stt request to {} failed: {error}", self.request_url()))
+            CoreError::Transcription(format!(
+                "stt request to {} failed: {error}",
+                self.request_url()
+            ))
         })?;
         let status = response.status();
         if !status.is_success() {
@@ -448,10 +531,9 @@ impl Transcriber for HttpSttTranscriber {
                 detail.trim()
             )));
         }
-        let body: TranscriptionBody = response
-            .json()
-            .await
-            .map_err(|error| CoreError::Transcription(format!("stt response was not JSON: {error}")))?;
+        let body: TranscriptionBody = response.json().await.map_err(|error| {
+            CoreError::Transcription(format!("stt response was not JSON: {error}"))
+        })?;
         let text = body.text.trim();
         if text.is_empty() {
             return Ok(None);
@@ -477,6 +559,24 @@ pub trait SttResolver: Send + Sync + 'static {
     /// Returns [`CoreError`] when the selection is invalid or its credential is
     /// unavailable.
     async fn resolve(&self, session: &Session) -> Result<Arc<dyn Transcriber>, CoreError>;
+
+    /// Build the transcriber for one capture channel.
+    ///
+    /// `channel` is `microphone` or `system_audio`, so a session can read each
+    /// device with its own model. The default implementation ignores the
+    /// channel so existing resolvers keep working.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError`] when the choice or the session selection is
+    /// invalid, or its credential is unavailable.
+    async fn resolve_channel(
+        &self,
+        session: &Session,
+        _channel: &str,
+    ) -> Result<Arc<dyn Transcriber>, CoreError> {
+        self.resolve(session).await
+    }
 }
 
 /// Always returns the embedded offline transcriber.
@@ -524,10 +624,18 @@ pub fn credential_from_env(credentials_ref: &str) -> Option<String> {
         .trim()
         .to_ascii_uppercase()
         .chars()
-        .map(|character| if character.is_ascii_alphanumeric() { character } else { '_' })
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '_'
+            }
+        })
         .collect();
     let key = format!("TALKCER_SECRET_{sanitized}");
-    std::env::var(key).ok().filter(|value| !value.trim().is_empty())
+    std::env::var(key)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 /// Resolves a session's STT provider from saved AI configurations.
@@ -538,13 +646,27 @@ pub fn credential_from_env(credentials_ref: &str) -> Option<String> {
 #[derive(Clone)]
 pub struct ConfiguredSttResolver {
     repository: Arc<dyn crate::ai::AiConfigurationRepository>,
+    audio: Option<Arc<crate::audio_selection::AudioSelectionService>>,
 }
 
 impl ConfiguredSttResolver {
     /// Wrap an AI configuration repository.
     #[must_use]
     pub fn new(repository: Arc<dyn crate::ai::AiConfigurationRepository>) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            audio: None,
+        }
+    }
+
+    /// Also read the per-channel model chosen on the Audio page.
+    #[must_use]
+    pub fn with_audio_selection(
+        mut self,
+        audio: Arc<crate::audio_selection::AudioSelectionService>,
+    ) -> Self {
+        self.audio = Some(audio);
+        self
     }
 }
 
@@ -558,6 +680,37 @@ impl SttResolver for ConfiguredSttResolver {
             .as_deref()
             .and_then(credential_from_env);
         build_transcriber(&selection, credential)
+    }
+
+    async fn resolve_channel(
+        &self,
+        session: &Session,
+        channel: &str,
+    ) -> Result<Arc<dyn Transcriber>, CoreError> {
+        let Some(chosen) = self.channel_model(channel).await? else {
+            return self.resolve(session).await;
+        };
+        let configurations = self.repository.list().await?;
+        let selection = selection_for_model(&chosen, &configurations)?;
+        let credential = selection
+            .credentials_ref
+            .as_deref()
+            .and_then(credential_from_env);
+        build_transcriber(&selection, credential)
+    }
+}
+
+impl ConfiguredSttResolver {
+    /// The model the Audio page chose for one channel, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error when the saved selection cannot be read.
+    pub async fn channel_model(&self, channel: &str) -> Result<Option<String>, CoreError> {
+        let Some(audio) = &self.audio else {
+            return Ok(None);
+        };
+        Ok(audio.get().await?.model_for(channel).map(str::to_owned))
     }
 }
 

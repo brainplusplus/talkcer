@@ -13,7 +13,9 @@ axum = { workspace = true }
 futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
 talkcer-core = { path = "../talkcer-core" }
+reqwest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true }

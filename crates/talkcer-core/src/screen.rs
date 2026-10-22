@@ -82,7 +82,8 @@ impl HttpVision {
 #[async_trait::async_trait]
 impl VisionReader for HttpVision {
     async fn read(&self, frame: &ScreenFrame) -> Result<String, CoreError> {
-        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &frame.png);
+        let encoded =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &frame.png);
         let body = serde_json::json!({
             "model": self.model,
             "messages": [{
@@ -98,7 +99,10 @@ impl VisionReader for HttpVision {
             request = request.bearer_auth(credential);
         }
         let response = request.send().await.map_err(|error| {
-            CoreError::Screen(format!("vision request to {} failed: {error}", self.request_url()))
+            CoreError::Screen(format!(
+                "vision request to {} failed: {error}",
+                self.request_url()
+            ))
         })?;
         if !response.status().is_success() {
             let status = response.status();
@@ -179,12 +183,21 @@ pub async fn answer_from_screen(
     note: Option<&str>,
 ) -> Result<ScreenAnswer, CoreError> {
     let reply = thinker.complete(&screen_task(mode, reading, note)).await?;
-    Ok(ScreenAnswer { reading: reading.to_owned(), reply })
+    Ok(ScreenAnswer {
+        reading: reading.to_owned(),
+        reply,
+    })
 }
 
 /// The thinker task for one screen reading, phrased for the mode.
-pub fn screen_task(mode: SessionMode, reading: &str, note: Option<&str>) -> crate::thinker::ThinkerTask {
-    let extra = note.map(|text| format!(" The user adds: {text}")).unwrap_or_default();
+pub fn screen_task(
+    mode: SessionMode,
+    reading: &str,
+    note: Option<&str>,
+) -> crate::thinker::ThinkerTask {
+    let extra = note
+        .map(|text| format!(" The user adds: {text}"))
+        .unwrap_or_default();
     let prompt = match mode {
         SessionMode::LiveInterview => format!(
             "A screen share shows: {reading}.{extra} Answer the question it asks in at most three sentences."

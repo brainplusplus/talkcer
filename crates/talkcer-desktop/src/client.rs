@@ -64,7 +64,11 @@ impl HttpOverlayApi {
         format!("{}{}", self.base, path)
     }
 
-    async fn preferences_call(&self, method: reqwest::Method, path: &str) -> Result<OverlayPreferences, String> {
+    async fn preferences_call(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+    ) -> Result<OverlayPreferences, String> {
         let response = self
             .client
             .request(method, self.url(path))
@@ -94,7 +98,10 @@ async fn decode<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> 
     let status = response.status();
     if !status.is_success() {
         let detail = response.text().await.unwrap_or_default();
-        return Err(format!("overlay request returned {status}: {}", detail.trim()));
+        return Err(format!(
+            "overlay request returned {status}: {}",
+            detail.trim()
+        ));
     }
     response
         .json::<T>()
@@ -105,7 +112,8 @@ async fn decode<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> 
 #[async_trait]
 impl OverlayApi for HttpOverlayApi {
     async fn preferences(&self) -> Result<OverlayPreferences, String> {
-        self.preferences_call(reqwest::Method::GET, "/overlay").await
+        self.preferences_call(reqwest::Method::GET, "/overlay")
+            .await
     }
 
     async fn view(&self) -> Result<Vec<TimelineItem>, String> {
@@ -120,15 +128,18 @@ impl OverlayApi for HttpOverlayApi {
     }
 
     async fn show(&self) -> Result<OverlayPreferences, String> {
-        self.preferences_call(reqwest::Method::POST, "/overlay/show").await
+        self.preferences_call(reqwest::Method::POST, "/overlay/show")
+            .await
     }
 
     async fn hide(&self) -> Result<OverlayPreferences, String> {
-        self.preferences_call(reqwest::Method::POST, "/overlay/hide").await
+        self.preferences_call(reqwest::Method::POST, "/overlay/hide")
+            .await
     }
 
     async fn toggle(&self) -> Result<OverlayPreferences, String> {
-        self.preferences_call(reqwest::Method::POST, "/overlay/toggle").await
+        self.preferences_call(reqwest::Method::POST, "/overlay/toggle")
+            .await
     }
 
     async fn move_to(&self, x: i64, y: i64) -> Result<OverlayPreferences, String> {
@@ -137,18 +148,27 @@ impl OverlayApi for HttpOverlayApi {
     }
 
     async fn set_opacity(&self, opacity: f64) -> Result<OverlayPreferences, String> {
-        self.preferences_body("/overlay/opacity", serde_json::json!({ "opacity": opacity }))
-            .await
+        self.preferences_body(
+            "/overlay/opacity",
+            serde_json::json!({ "opacity": opacity }),
+        )
+        .await
     }
 
     async fn set_click_through(&self, enabled: bool) -> Result<OverlayPreferences, String> {
-        self.preferences_body("/overlay/click-through", serde_json::json!({ "enabled": enabled }))
-            .await
+        self.preferences_body(
+            "/overlay/click-through",
+            serde_json::json!({ "enabled": enabled }),
+        )
+        .await
     }
 
     async fn set_undetectable(&self, enabled: bool) -> Result<OverlayPreferences, String> {
-        self.preferences_body("/overlay/undetectable", serde_json::json!({ "enabled": enabled }))
-            .await
+        self.preferences_body(
+            "/overlay/undetectable",
+            serde_json::json!({ "enabled": enabled }),
+        )
+        .await
     }
 
     async fn follow(&self, session_id: Uuid) -> Result<OverlayPreferences, String> {
@@ -175,7 +195,10 @@ impl OverlayApi for HttpOverlayApi {
         let status = response.status();
         if !status.is_success() {
             let detail = response.text().await.unwrap_or_default();
-            return Err(format!("assistant action returned {status}: {}", detail.trim()));
+            return Err(format!(
+                "assistant action returned {status}: {}",
+                detail.trim()
+            ));
         }
         Ok(())
     }

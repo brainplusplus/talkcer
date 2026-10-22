@@ -21,7 +21,11 @@ struct FixedCapturer;
 #[async_trait::async_trait]
 impl ScreenCapturer for FixedCapturer {
     async fn capture(&self) -> Result<ScreenFrame, talkcer_core::CoreError> {
-        Ok(ScreenFrame { png: vec![1, 2, 3], width: 1920, height: 1080 })
+        Ok(ScreenFrame {
+            png: vec![1, 2, 3],
+            width: 1920,
+            height: 1080,
+        })
     }
 }
 
@@ -46,7 +50,10 @@ async fn service() -> (TimelineService<SqliteTimelineRepository>, Uuid) {
         })
         .await
         .unwrap();
-    (TimelineService::new(SqliteTimelineRepository::new(pool)), session.id)
+    (
+        TimelineService::new(SqliteTimelineRepository::new(pool)),
+        session.id,
+    )
 }
 
 #[tokio::test]
@@ -83,20 +90,42 @@ async fn staged_captures_wait_until_sent() {
     let (timeline, session_id) = service().await;
     let frame = FixedCapturer.capture().await.unwrap();
 
-    record_screen(&timeline, session_id, ScreenIntent::Stage, &frame, None, None)
-        .await
-        .unwrap();
-    record_screen(&timeline, session_id, ScreenIntent::Stage, &frame, None, None)
-        .await
-        .unwrap();
+    record_screen(
+        &timeline,
+        session_id,
+        ScreenIntent::Stage,
+        &frame,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    record_screen(
+        &timeline,
+        session_id,
+        ScreenIntent::Stage,
+        &frame,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     let page = timeline
-        .list(session_id, TimelineQuery { limit: 20, before: None })
+        .list(
+            session_id,
+            TimelineQuery {
+                limit: 20,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     let waiting = pending_screens(&page.items);
     assert_eq!(waiting.len(), 2);
-    assert!(waiting.iter().all(|item| item.kind == ItemKind::SystemEvent));
+    assert!(waiting
+        .iter()
+        .all(|item| item.kind == ItemKind::SystemEvent));
 
     // Sending clears the flag, so a second send does not repeat them.
     for item in waiting {
@@ -105,7 +134,13 @@ async fn staged_captures_wait_until_sent() {
         timeline.set_metadata(item.id, metadata).await.unwrap();
     }
     let after = timeline
-        .list(session_id, TimelineQuery { limit: 20, before: None })
+        .list(
+            session_id,
+            TimelineQuery {
+                limit: 20,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     assert!(after.items.iter().all(|item| !is_pending(item)));
@@ -132,7 +167,13 @@ async fn direct_capture_stores_the_answer_beside_the_screen() {
     assert_eq!(reply.kind, ItemKind::AiMessage);
 
     let page = timeline
-        .list(session_id, TimelineQuery { limit: 20, before: None })
+        .list(
+            session_id,
+            TimelineQuery {
+                limit: 20,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(page.items.len(), 2);
@@ -148,7 +189,13 @@ fn each_mode_phrases_the_screen_prompt_differently() {
     ]
     .map(|mode| screen_task(mode, reading, None).prompt());
     assert!(prompts.iter().all(|prompt| prompt.contains(reading)));
-    assert_eq!(prompts.iter().collect::<std::collections::HashSet<_>>().len(), 3);
+    assert_eq!(
+        prompts
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        3
+    );
 }
 
 fn _typed(item: TimelineItem) -> TimelineItem {

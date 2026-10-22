@@ -38,6 +38,17 @@ pub enum CoreError {
     #[error("session not found")]
     NotFound,
 
+    /// No downloadable local model matches the capability, provider, and model.
+    #[error("no downloadable model for {capability} provider '{provider}' model '{model}'")]
+    ModelNotFound {
+        /// Capability the caller asked for.
+        capability: String,
+        /// Provider the caller asked for.
+        provider: String,
+        /// Model the caller asked for.
+        model: String,
+    },
+
     /// A screen could not be captured or read.
     #[error("screen capture failed: {0}")]
     Screen(String),
@@ -153,6 +164,10 @@ pub enum CoreError {
     /// A provider call did not finish in time.
     #[error("provider timed out")]
     ProviderTimeout,
+
+    /// A download of the same model is already running.
+    #[error("download already running")]
+    DownloadInProgress,
 
     /// Persistence failed.
     #[error("database error: {0}")]

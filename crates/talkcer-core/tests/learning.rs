@@ -1,7 +1,7 @@
 use talkcer_core::{
     connect_and_migrate, CreateSession, LearningAction, LearningService, LearningTurn, SessionMode,
-    SessionService, SessionStatus, SqliteSessionRepository, SqliteTimelineRepository, TimelineQuery,
-    TimelineService,
+    SessionService, SessionStatus, SqliteSessionRepository, SqliteTimelineRepository,
+    TimelineQuery, TimelineService,
 };
 use uuid::Uuid;
 
@@ -11,7 +11,9 @@ fn path(name: &str) -> std::path::PathBuf {
     dir.join(format!("learning-{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn service(file: &std::path::Path) -> LearningService<SqliteSessionRepository, SqliteTimelineRepository> {
+async fn service(
+    file: &std::path::Path,
+) -> LearningService<SqliteSessionRepository, SqliteTimelineRepository> {
     let pool = connect_and_migrate(file).await.unwrap();
     LearningService::new(
         SessionService::new(SqliteSessionRepository::new(pool.clone())),
@@ -38,11 +40,19 @@ async fn learning_session_can_continue_after_reopen() {
 
     let controller = service(&file).await;
     let started = controller
-        .turn(session.id, LearningTurn { action: LearningAction::Start, text: None })
+        .turn(
+            session.id,
+            LearningTurn {
+                action: LearningAction::Start,
+                text: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(started.status, SessionStatus::Active);
-    assert!(started.items[0].text.contains("PostgreSQL query optimization"));
+    assert!(started.items[0]
+        .text
+        .contains("PostgreSQL query optimization"));
     assert_eq!(started.items[1].metadata["turn"], "practice");
 
     controller
@@ -84,13 +94,34 @@ async fn learning_session_can_continue_after_reopen() {
         connect_and_migrate(&file).await.unwrap(),
     ));
     let page = timeline
-        .list(session.id, TimelineQuery { limit: 100, before: None })
+        .list(
+            session.id,
+            TimelineQuery {
+                limit: 100,
+                before: None,
+            },
+        )
         .await
         .unwrap();
-    let turns: Vec<_> = page.items.iter().map(|item| item.metadata["turn"].as_str().unwrap()).collect();
+    let turns: Vec<_> = page
+        .items
+        .iter()
+        .map(|item| item.metadata["turn"].as_str().unwrap())
+        .collect();
     assert_eq!(
         turns,
-        ["discussion", "practice", "question", "discussion", "practice", "practice_answer", "feedback", "question", "discussion", "practice"]
+        [
+            "discussion",
+            "practice",
+            "question",
+            "discussion",
+            "practice",
+            "practice_answer",
+            "feedback",
+            "question",
+            "discussion",
+            "practice"
+        ]
     );
     let _ = std::fs::remove_file(file);
 }

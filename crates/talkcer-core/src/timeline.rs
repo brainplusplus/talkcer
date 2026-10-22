@@ -377,7 +377,11 @@ pub trait TimelineRepository: Send + Sync {
     ) -> Result<TranscriptUpsert, CoreError>;
 
     /// List one page of a session.
-    async fn list(&self, session_id: Uuid, query: &TimelineQuery) -> Result<TimelinePage, CoreError>;
+    async fn list(
+        &self,
+        session_id: Uuid,
+        query: &TimelineQuery,
+    ) -> Result<TimelinePage, CoreError>;
 
     /// Store a user message.
     async fn append_message(
@@ -500,19 +504,27 @@ impl TimelineRepository for SqliteTimelineRepository {
             .await?;
             true
         };
-        let item = find_item(&mut tx, id).await?.ok_or(CoreError::ItemNotFound)?;
+        let item = find_item(&mut tx, id)
+            .await?
+            .ok_or(CoreError::ItemNotFound)?;
         tx.commit().await?;
         Ok(TranscriptUpsert { item, created })
     }
 
-    async fn list(&self, session_id: Uuid, query: &TimelineQuery) -> Result<TimelinePage, CoreError> {
+    async fn list(
+        &self,
+        session_id: Uuid,
+        query: &TimelineQuery,
+    ) -> Result<TimelinePage, CoreError> {
         if !(1..=500).contains(&query.limit) {
             return Err(CoreError::InvalidLimit);
         }
         let mut tx = self.pool.begin().await?;
         ensure_session(&mut tx, session_id).await?;
         let rows = if let Some(before) = query.before {
-            let cursor = find_item(&mut tx, before).await?.ok_or(CoreError::ItemNotFound)?;
+            let cursor = find_item(&mut tx, before)
+                .await?
+                .ok_or(CoreError::ItemNotFound)?;
             if cursor.session_id != session_id {
                 return Err(CoreError::ItemNotFound);
             }
@@ -549,7 +561,10 @@ impl TimelineRepository for SqliteTimelineRepository {
             .fetch_all(&mut *tx)
             .await?
         };
-        let mut items = rows.into_iter().map(map_item).collect::<Result<Vec<_>, _>>()?;
+        let mut items = rows
+            .into_iter()
+            .map(map_item)
+            .collect::<Result<Vec<_>, _>>()?;
         items.reverse();
         Ok(TimelinePage { items })
     }
@@ -578,7 +593,11 @@ impl TimelineRepository for SqliteTimelineRepository {
             now.timestamp_millis(),
             None,
             true,
-            if metadata.is_null() { json!({}) } else { metadata },
+            if metadata.is_null() {
+                json!({})
+            } else {
+                metadata
+            },
             now,
         );
         insert_item(&mut tx, &item).await?;
@@ -667,10 +686,12 @@ impl TimelineRepository for SqliteTimelineRepository {
     }
 
     async fn get_item(&self, id: Uuid) -> Result<Option<TimelineItem>, CoreError> {
-        let row = sqlx::query(&format!("SELECT {COLUMNS} FROM timeline_items WHERE id = ?"))
-            .bind(id.to_string())
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query(&format!(
+            "SELECT {COLUMNS} FROM timeline_items WHERE id = ?"
+        ))
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
         row.map(map_item).transpose()
     }
 
@@ -706,7 +727,11 @@ impl TimelineRepository for SqliteTimelineRepository {
             now.timestamp_millis(),
             Some(now.timestamp_millis()),
             true,
-            if metadata.is_object() { metadata } else { json!({}) },
+            if metadata.is_object() {
+                metadata
+            } else {
+                json!({})
+            },
             now,
         );
         insert_item(&mut tx, &item).await?;
@@ -769,10 +794,7 @@ where
 
     /// Wrap a repository with a custom thinker resolver.
     #[must_use]
-    pub fn with_thinker(
-        repository: R,
-        thinker: Arc<dyn crate::thinker::ThinkerResolver>,
-    ) -> Self {
+    pub fn with_thinker(repository: R, thinker: Arc<dyn crate::thinker::ThinkerResolver>) -> Self {
         Self {
             repository: Arc::new(repository),
             thinker,
@@ -905,12 +927,13 @@ where
                 language: request.language.clone(),
             };
             let reply = crate::thinker::EmbeddedThinker.complete(&task).await?;
-            return Ok(AssistantReply::new(reply.text, reply.provider, "assistant_action"));
+            return Ok(AssistantReply::new(
+                reply.text,
+                reply.provider,
+                "assistant_action",
+            ));
         };
-        let session = sessions
-            .get(session_id)
-            .await?
-            .ok_or(CoreError::NotFound)?;
+        let session = sessions.get(session_id).await?.ok_or(CoreError::NotFound)?;
         let target = self
             .repository
             .get_item(request.target_id)
@@ -925,7 +948,11 @@ where
             language: request.language.clone(),
         };
         let reply = self.think(&session, &task).await?;
-        Ok(AssistantReply::new(reply.text, reply.provider, "assistant_action"))
+        Ok(AssistantReply::new(
+            reply.text,
+            reply.provider,
+            "assistant_action",
+        ))
     }
 
     /// Append one completed timeline row.
@@ -999,10 +1026,12 @@ async fn find_item(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     id: Uuid,
 ) -> Result<Option<TimelineItem>, CoreError> {
-    let row = sqlx::query(&format!("SELECT {COLUMNS} FROM timeline_items WHERE id = ?"))
-        .bind(id.to_string())
-        .fetch_optional(&mut **tx)
-        .await?;
+    let row = sqlx::query(&format!(
+        "SELECT {COLUMNS} FROM timeline_items WHERE id = ?"
+    ))
+    .bind(id.to_string())
+    .fetch_optional(&mut **tx)
+    .await?;
     row.map(map_item).transpose()
 }
 
@@ -1054,7 +1083,7 @@ fn map_item(row: sqlx::sqlite::SqliteRow) -> Result<TimelineItem, CoreError> {
         DateTime::parse_from_rfc3339(&created_at)
             .map(|time| time.with_timezone(&Utc))
             .map_err(|error| CoreError::Database(sqlx::Error::Decode(Box::new(error))))?,
-        ))
+    ))
 }
 
 fn merged_metadata(existing: Value, incoming: Option<&Value>) -> Option<Value> {
@@ -1080,9 +1109,14 @@ fn merged_metadata(existing: Value, incoming: Option<&Value>) -> Option<Value> {
 }
 
 fn object_metadata(value: Option<&Value>) -> Option<Value> {
-    value.and_then(|item| item.as_object().filter(|object| !object.is_empty()).map(|_| item.clone()))
+    value.and_then(|item| {
+        item.as_object()
+            .filter(|object| !object.is_empty())
+            .map(|_| item.clone())
+    })
 }
 
 fn parse_uuid(value: String) -> Result<Uuid, CoreError> {
-    Uuid::parse_str(&value).map_err(|error| CoreError::Database(sqlx::Error::Decode(Box::new(error))))
+    Uuid::parse_str(&value)
+        .map_err(|error| CoreError::Database(sqlx::Error::Decode(Box::new(error))))
 }

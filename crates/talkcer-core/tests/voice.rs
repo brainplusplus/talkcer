@@ -1,7 +1,8 @@
 use base64::Engine;
 use talkcer_core::{
-    connect_and_migrate, CreateSession, SessionMode, SessionService, Source, Speaker, SpeakRequest,
-    SqliteSessionRepository, SqliteTimelineRepository, TimelineService, UpdateSession, VoiceAudio, VoiceService,
+    connect_and_migrate, CreateSession, SessionMode, SessionService, Source, SpeakRequest, Speaker,
+    SqliteSessionRepository, SqliteTimelineRepository, TimelineService, UpdateSession, VoiceAudio,
+    VoiceService,
 };
 use uuid::Uuid;
 
@@ -29,7 +30,10 @@ async fn mock_audio_updates_one_transcript_and_tts_follows_configuration() {
         })
         .await
         .unwrap();
-    let voice = VoiceService::new(sessions.clone(), TimelineService::new(SqliteTimelineRepository::new(pool)));
+    let voice = VoiceService::new(
+        sessions.clone(),
+        TimelineService::new(SqliteTimelineRepository::new(pool)),
+    );
 
     let partial = voice
         .transcribe(
@@ -68,7 +72,12 @@ async fn mock_audio_updates_one_transcript_and_tts_follows_configuration() {
     assert!(updated.item.is_final);
 
     let silent = voice
-        .speak(session.id, SpeakRequest { text: "Feedback".to_owned() })
+        .speak(
+            session.id,
+            SpeakRequest {
+                text: "Feedback".to_owned(),
+            },
+        )
         .await
         .unwrap();
     assert!(!silent.enabled);
@@ -84,7 +93,12 @@ async fn mock_audio_updates_one_transcript_and_tts_follows_configuration() {
         .await
         .unwrap();
     let spoken = voice
-        .speak(session.id, SpeakRequest { text: "Feedback".to_owned() })
+        .speak(
+            session.id,
+            SpeakRequest {
+                text: "Feedback".to_owned(),
+            },
+        )
         .await
         .unwrap();
     assert!(spoken.enabled);

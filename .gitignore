@@ -13,3 +13,9 @@
 
 # Dev stack process record
 /logs
+
+# Downloaded model weights, fetched at runtime by the AI settings page
+/models
+
+# Browser automation traces from local verification
+/.playwright-mcp

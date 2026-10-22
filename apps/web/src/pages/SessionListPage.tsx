@@ -15,29 +15,34 @@ export function SessionListPage({ mode, label }: { mode: SessionMode; label: str
   });
 
   return (
-    <section>
-      <div className="row">
-        <h2>{label}</h2>
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>{label}</h2>
+          <p className="lede">Sessions in this mode. Open one to continue it.</p>
+        </div>
         <Link to={`/${SLUG[mode]}/new`}>New session</Link>
-      </div>
+      </header>
       {sessions.isLoading && <p className="muted">Loading sessions…</p>}
       {sessions.isError && <p className="error">Could not load sessions.</p>}
       {sessions.data && sessions.data.sessions.length === 0 && (
         <p className="muted">No sessions in this mode yet.</p>
       )}
       {sessions.data && sessions.data.sessions.length > 0 && (
-        <ul className="list">
-          {sessions.data.sessions.map((session) => (
-            <li key={session.id} data-testid="session-link">
-              <Link to={`/${SLUG[session.mode]}/${session.id}`}>
-                <strong>{session.title}</strong>
-                <div className="meta">{session.status}</div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="sheet">
+          <ul className="list">
+            {sessions.data.sessions.map((session) => (
+              <li key={session.id} data-testid="session-link">
+                <Link to={`/${SLUG[session.mode]}/${session.id}`}>
+                  <strong>{session.title}</strong>
+                  <span className="meta">{session.status}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-      <p className="meta">API endpoint: <code>{listSessionsPath(mode)}</code></p>
+      <p className="note">API endpoint: <code>{listSessionsPath(mode)}</code></p>
     </section>
   );
 }

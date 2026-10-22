@@ -1,7 +1,7 @@
 use talkcer_core::{
     connect_and_migrate, CreateSession, MockAction, MockInterviewService, MockTurn, SessionMode,
-    SessionService, SessionStatus, SqliteSessionRepository, SqliteTimelineRepository, TimelineQuery,
-    TimelineService,
+    SessionService, SessionStatus, SqliteSessionRepository, SqliteTimelineRepository,
+    TimelineQuery, TimelineService,
 };
 use uuid::Uuid;
 
@@ -11,7 +11,9 @@ fn path(name: &str) -> std::path::PathBuf {
     dir.join(format!("mock-{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn service(file: &std::path::Path) -> MockInterviewService<SqliteSessionRepository, SqliteTimelineRepository> {
+async fn service(
+    file: &std::path::Path,
+) -> MockInterviewService<SqliteSessionRepository, SqliteTimelineRepository> {
     let pool = connect_and_migrate(file).await.unwrap();
     MockInterviewService::new(
         SessionService::new(SqliteSessionRepository::new(pool.clone())),
@@ -38,7 +40,13 @@ async fn text_mock_interview_keeps_history() {
 
     let controller = service(&file).await;
     let started = controller
-        .turn(session.id, MockTurn { action: MockAction::Start, text: None })
+        .turn(
+            session.id,
+            MockTurn {
+                action: MockAction::Start,
+                text: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(started.status, SessionStatus::Active);
@@ -73,7 +81,13 @@ async fn text_mock_interview_keeps_history() {
     assert_eq!(completed.items[2].metadata["turn"], "summary");
 
     let blank = controller
-        .turn(session.id, MockTurn { action: MockAction::Answer, text: Some("  ".to_owned()) })
+        .turn(
+            session.id,
+            MockTurn {
+                action: MockAction::Answer,
+                text: Some("  ".to_owned()),
+            },
+        )
         .await
         .unwrap_err();
     assert!(blank.to_string().contains("must not be empty"));
@@ -83,7 +97,13 @@ async fn text_mock_interview_keeps_history() {
     let pool = connect_and_migrate(&file).await.unwrap();
     let timeline = TimelineService::new(SqliteTimelineRepository::new(pool));
     let page = timeline
-        .list(session.id, TimelineQuery { limit: 100, before: None })
+        .list(
+            session.id,
+            TimelineQuery {
+                limit: 100,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     let turns: Vec<_> = page
@@ -91,7 +111,17 @@ async fn text_mock_interview_keeps_history() {
         .iter()
         .map(|item| item.metadata["turn"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(turns, ["question", "answer", "follow_up", "answer", "feedback", "summary"]);
+    assert_eq!(
+        turns,
+        [
+            "question",
+            "answer",
+            "follow_up",
+            "answer",
+            "feedback",
+            "summary"
+        ]
+    );
     let _ = reopened;
     let _ = std::fs::remove_file(file);
 }

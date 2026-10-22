@@ -10,7 +10,8 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use talkcer_core::{
-    AssistantAction, AssistantActionRequest, CoreError, ItemKind, TimelineItem, TimelineQuery,
+    build_thinker, credential_from_env, select_model, AssistantAction, AssistantActionRequest,
+    CoreError, ItemKind, Purpose, Speaker, ThinkerTask, TimelineItem, TimelineQuery,
     UpsertTranscript,
 };
 use uuid::Uuid;
@@ -22,9 +23,15 @@ use crate::ws::{publish_assistant, publish_transcript};
 /// Timeline routes mounted under `/api`.
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/api/sessions/{id}/transcripts", axum::routing::post(upsert_transcript))
+        .route(
+            "/api/sessions/{id}/transcripts",
+            axum::routing::post(upsert_transcript),
+        )
         .route("/api/sessions/{id}/timeline", get(list_timeline))
-        .route("/api/sessions/{id}/messages", axum::routing::post(create_message))
+        .route(
+            "/api/sessions/{id}/messages",
+            axum::routing::post(create_message),
+        )
         .route(
             "/api/sessions/{id}/assistant-actions",
             axum::routing::post(assistant_action),
@@ -43,6 +50,12 @@ struct MessageBody {
     text: String,
     #[serde(default)]
     metadata: Value,
+    /// `provider:model` override. Absent values use the session thinker.
+    #[serde(default)]
+    model: Option<String>,
+    /// Prepend the stored profile (without birth date or place) to the prompt.
+    #[serde(default)]
+    profile_context: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,16 +122,99 @@ async fn create_message(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     Json(body): Json<MessageBody>,
-) -> Result<(StatusCode, Json<TimelineItem>), ApiError> {
+) -> Result<(StatusCode, Json<Value>), ApiError> {
     if body.kind != ItemKind::UserMessage.as_str() {
         return Err(ApiError(CoreError::InvalidItemKind(body.kind)));
     }
+    let profile_context = body.profile_context;
+    let model = body.model;
     let item = state
         .timeline
-        .append_message(id, body.text, body.metadata)
+        .append_message(id, body.text.clone(), body.metadata)
         .await?;
     tracing::info!(session_id = %id, message_id = %item.id, "user message stored");
-    Ok((StatusCode::CREATED, Json(item)))
+    let reply = match answer(&state, id, &body.text, model.as_deref(), profile_context).await {
+        Ok(reply) => Some(reply),
+        Err(error) => {
+            tracing::warn!(session_id = %id, error = %error, "chat reply failed");
+            None
+        }
+    };
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({
+            "message": item,
+            "reply": reply,
+        })),
+    ))
+}
+
+/// Generate one reply, store it, and publish it. Validation errors from the
+/// user message itself are returned before this runs.
+async fn answer(
+    state: &AppState,
+    id: Uuid,
+    text: &str,
+    model: Option<&str>,
+    profile_context: bool,
+) -> Result<TimelineItem, CoreError> {
+    let session = state.sessions.get(id).await?;
+    let mut prompt = text.trim().to_owned();
+    if profile_context {
+        let profile = state.profile.get().await?;
+        let context = profile.context_text();
+        if !context.is_empty() {
+            prompt = format!("Profile:\n{context}\n\n{prompt}");
+        }
+    }
+    let task = ThinkerTask::Chat { prompt };
+    let reply = if let Some((provider, model)) = split_model(model) {
+        let thinker = override_thinker(state, provider, model).await?;
+        thinker.complete(&task).await?
+    } else {
+        state.timeline.think(&session, &task).await?
+    };
+    let model_label = model.unwrap_or(reply.provider.as_str()).to_owned();
+    let item = state
+        .timeline
+        .append_item(
+            id,
+            ItemKind::AiMessage,
+            Speaker::Ai,
+            Purpose::AssistantResponse,
+            reply.text,
+            json!({ "provider": reply.provider, "model": model_label }),
+        )
+        .await?;
+    publish_assistant(state, id, &item);
+    Ok(item)
+}
+
+/// `provider:model` with both halves non-empty.
+fn split_model(model: Option<&str>) -> Option<(&str, &str)> {
+    let (provider, model) = model?.split_once(':')?;
+    let provider = provider.trim();
+    let model = model.trim();
+    if provider.is_empty() || model.is_empty() {
+        None
+    } else {
+        Some((provider, model))
+    }
+}
+
+/// Build a thinker for one request's model without changing the session.
+async fn override_thinker(
+    state: &AppState,
+    provider: &str,
+    model: &str,
+) -> Result<std::sync::Arc<dyn talkcer_core::Thinker>, CoreError> {
+    let configurations = state.ai.list().await?;
+    let selection = select_model(provider, model, &configurations)?;
+    let credential = selection
+        .credentials_ref
+        .as_deref()
+        .and_then(credential_from_env);
+    build_thinker(&selection, credential)
 }
 
 async fn assistant_action(

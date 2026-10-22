@@ -131,7 +131,9 @@ where
                     source: Source::Microphone,
                     text: event.text,
                     started_at_ms: input.started_at_ms,
-                    ended_at_ms: input.is_final.then_some(input.started_at_ms.saturating_add(1)),
+                    ended_at_ms: input
+                        .is_final
+                        .then_some(input.started_at_ms.saturating_add(1)),
                     is_final: event.is_final,
                     metadata: Some(json!({ "audio_source": input.audio_source })),
                 },
@@ -145,7 +147,11 @@ where
     ///
     /// Returns [`CoreError::NotFound`] when the session does not exist and
     /// [`CoreError::EmptyText`] when the text is blank while TTS is enabled.
-    pub async fn speak(&self, session_id: Uuid, request: SpeakRequest) -> Result<SpeechAudio, CoreError> {
+    pub async fn speak(
+        &self,
+        session_id: Uuid,
+        request: SpeakRequest,
+    ) -> Result<SpeechAudio, CoreError> {
         let session = self.sessions.get(session_id).await?;
         if !tts_enabled(&session) {
             return Ok(SpeechAudio {
@@ -163,9 +169,7 @@ where
         Ok(SpeechAudio {
             enabled: true,
             content_type: Some(output.content_type),
-            audio_base64: Some(
-                base64::engine::general_purpose::STANDARD.encode(output.bytes),
-            ),
+            audio_base64: Some(base64::engine::general_purpose::STANDARD.encode(output.bytes)),
         })
     }
 }
@@ -193,7 +197,9 @@ pub fn transcript_text(input: &VoiceAudio) -> Result<String, CoreError> {
     }
     let collected = collected.trim().to_owned();
     if collected.is_empty() {
-        Err(CoreError::InvalidAudio("mock audio did not contain text".to_owned()))
+        Err(CoreError::InvalidAudio(
+            "mock audio did not contain text".to_owned(),
+        ))
     } else {
         Ok(collected)
     }
@@ -211,4 +217,3 @@ pub fn mock_stt_event(text: &str, is_final: bool) -> MockSttEvent {
 fn tts_enabled(session: &Session) -> bool {
     session.configuration.get("tts").and_then(Value::as_str) == Some("enabled")
 }
-

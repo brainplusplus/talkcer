@@ -33,13 +33,18 @@ export function RemotePage() {
   }
 
   return (
-    <section className="stack">
-      <h2>Remote access</h2>
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>Remote access</h2>
+        </div>
+      </header>
+      <div className="sheet pad">
       {status.isLoading && <p className="muted">Loading remote status…</p>}
       {status.isError && <p className="error">Could not load remote status.</p>}
       <p className="meta">{status.data?.enabled ? "Pairing is on." : "Pairing is off. A second computer is denied."}</p>
       <div className="row">
-        <button type="button" onClick={() => pair.mutate(true)}>Pair this computer</button>
+        <button type="button" className="primary" onClick={() => pair.mutate(true)}>Pair this computer</button>
         <button type="button" onClick={() => pair.mutate(false)}>Disable remote</button>
       </div>
       {shownToken && <p>Token, shown once: <code>{shownToken}</code></p>}
@@ -59,6 +64,7 @@ export function RemotePage() {
         </ul>
       )}
       {error && <p className="error">{error}</p>}
+      </div>
     </section>
   );
 }

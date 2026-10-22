@@ -16,7 +16,9 @@ fn db_path(name: &str) -> PathBuf {
     dir.join(format!("{name}-{}.sqlite", Uuid::now_v7()))
 }
 
-async fn open(name: &str) -> (
+async fn open(
+    name: &str,
+) -> (
     SessionService<SqliteSessionRepository>,
     TimelineService<SqliteTimelineRepository>,
     sqlx::SqlitePool,
@@ -98,7 +100,13 @@ async fn three_partials_update_one_item_and_final_replaces_text() {
     assert_eq!(final_item.item.utterance_id, Some(id));
 
     let page = timeline
-        .list(session.id, TimelineQuery { limit: 100, before: None })
+        .list(
+            session.id,
+            TimelineQuery {
+                limit: 100,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(page.items.len(), 1);
@@ -107,7 +115,10 @@ async fn three_partials_update_one_item_and_final_replaces_text() {
         .upsert_transcript(session.id, partial(Some(id), "late", 12_000, false))
         .await
         .unwrap_err();
-    assert_eq!(rejected.to_string(), "utterance is final and cannot be updated");
+    assert_eq!(
+        rejected.to_string(),
+        "utterance is final and cannot be updated"
+    );
 
     drop(timeline);
     drop(sessions);
@@ -135,11 +146,20 @@ async fn timeline_is_ordered_and_paginates_before_a_cursor() {
     }
 
     let page = timeline
-        .list(session.id, TimelineQuery { limit: 2, before: None })
+        .list(
+            session.id,
+            TimelineQuery {
+                limit: 2,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(
-        page.items.iter().map(|item| item.text.as_str()).collect::<Vec<_>>(),
+        page.items
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>(),
         ["b", "c"]
     );
 
@@ -189,7 +209,13 @@ async fn timeline_persists_after_restart() {
     let pool = connect_and_migrate(&path).await.unwrap();
     let timeline = TimelineService::new(SqliteTimelineRepository::new(pool));
     let page = timeline
-        .list(session_id, TimelineQuery { limit: 10, before: None })
+        .list(
+            session_id,
+            TimelineQuery {
+                limit: 10,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(page.items[0].text, "saved");
@@ -232,11 +258,20 @@ async fn assistant_stub_writes_a_separate_ai_item_without_a_provider() {
         stub_assistant_text(AssistantAction::Explain, transcript.item.id)
     );
     assert_eq!(result.message.metadata["stub"], true);
-    assert_eq!(result.message.metadata["target"]["id"], transcript.item.id.to_string());
+    assert_eq!(
+        result.message.metadata["target"]["id"],
+        transcript.item.id.to_string()
+    );
     assert!(result.message.metadata.get("utterance_id").is_none());
 
     let page = timeline
-        .list(session.id, TimelineQuery { limit: 10, before: None })
+        .list(
+            session.id,
+            TimelineQuery {
+                limit: 10,
+                before: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(page.items.len(), 3);

@@ -21,8 +21,14 @@ pub fn routes() -> Router<AppState> {
         .route("/api/overlay/toggle", axum::routing::post(toggle))
         .route("/api/overlay/move", axum::routing::post(move_overlay))
         .route("/api/overlay/opacity", axum::routing::post(opacity))
-        .route("/api/overlay/click-through", axum::routing::post(click_through))
-        .route("/api/overlay/undetectable", axum::routing::post(undetectable))
+        .route(
+            "/api/overlay/click-through",
+            axum::routing::post(click_through),
+        )
+        .route(
+            "/api/overlay/undetectable",
+            axum::routing::post(undetectable),
+        )
         .route("/api/overlay/view", axum::routing::get(view))
 }
 

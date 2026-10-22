@@ -157,7 +157,10 @@ where
     /// # Errors
     ///
     /// Returns [`CoreError::InvalidOverlay`] when the overlay is hidden.
-    pub async fn move_to(&self, position: OverlayPosition) -> Result<OverlayPreferences, CoreError> {
+    pub async fn move_to(
+        &self,
+        position: OverlayPosition,
+    ) -> Result<OverlayPreferences, CoreError> {
         self.require_visible().await?;
         sqlx::query(
             "UPDATE overlay_preferences SET position_x = ?2, position_y = ?3, updated_at = ?4 WHERE id = ?1",
@@ -222,12 +225,14 @@ where
     /// Returns a database error when the row cannot be saved.
     pub async fn set_undetectable(&self, enabled: bool) -> Result<OverlayPreferences, CoreError> {
         self.ensure().await?;
-        sqlx::query("UPDATE overlay_preferences SET undetectable = ?2, updated_at = ?3 WHERE id = ?1")
-            .bind(ROW_ID)
-            .bind(i64::from(enabled))
-            .bind(Utc::now().to_rfc3339())
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "UPDATE overlay_preferences SET undetectable = ?2, updated_at = ?3 WHERE id = ?1",
+        )
+        .bind(ROW_ID)
+        .bind(i64::from(enabled))
+        .bind(Utc::now().to_rfc3339())
+        .execute(&self.pool)
+        .await?;
         self.load().await
     }
 
@@ -260,14 +265,26 @@ where
     pub async fn view(&self) -> Result<OverlayView, CoreError> {
         let preferences = self.get().await?;
         if preferences.state == OverlayState::Hidden {
-            return Ok(OverlayView { preferences, items: Vec::new() });
+            return Ok(OverlayView {
+                preferences,
+                items: Vec::new(),
+            });
         }
         let Some(session_id) = preferences.active_session_id else {
-            return Ok(OverlayView { preferences, items: Vec::new() });
+            return Ok(OverlayView {
+                preferences,
+                items: Vec::new(),
+            });
         };
         let page = self
             .timeline
-            .list(session_id, crate::timeline::TimelineQuery { limit: 200, before: None })
+            .list(
+                session_id,
+                crate::timeline::TimelineQuery {
+                    limit: 200,
+                    before: None,
+                },
+            )
             .await?;
         let items = page
             .items
@@ -287,10 +304,11 @@ where
     }
 
     async fn ensure(&self) -> Result<(), CoreError> {
-        let exists: Option<String> = sqlx::query_scalar("SELECT id FROM overlay_preferences WHERE id = ?1")
-            .bind(ROW_ID)
-            .fetch_optional(&self.pool)
-            .await?;
+        let exists: Option<String> =
+            sqlx::query_scalar("SELECT id FROM overlay_preferences WHERE id = ?1")
+                .bind(ROW_ID)
+                .fetch_optional(&self.pool)
+                .await?;
         if exists.is_some() {
             return Ok(());
         }

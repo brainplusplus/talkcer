@@ -68,8 +68,13 @@ export function OverlayPage() {
   }
 
   return (
-    <section className="stack">
-      <h2>Overlay</h2>
+    <section className="page">
+      <header className="page-head">
+        <div>
+          <h2>Overlay</h2>
+        </div>
+      </header>
+      <div className="sheet pad">
       {overlay.isLoading && <p className="muted">Loading overlay…</p>}
       {overlay.isError && <p className="error">Could not load overlay preferences.</p>}
       <p className="meta">
@@ -131,6 +136,7 @@ export function OverlayPage() {
         <p key={item.id}>{item.speaker}: {item.text}</p>
       ))}
       {error && <p className="error">{error}</p>}
+      </div>
     </section>
   );
 }
